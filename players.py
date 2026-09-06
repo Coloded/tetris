@@ -1,5 +1,6 @@
 """Shared local player accounts and independent scores for the two games."""
 import curses
+from i18n import tr
 import re
 import sqlite3
 from pathlib import Path
@@ -117,23 +118,23 @@ def login(stdscr):
     name_re = re.compile(r"^[A-Za-z0-9]+$")
     while True:
         stdscr.clear()
-        safe_addstr(stdscr, 1, 2, "Player login - Esc: quit")
-        name = prompt(stdscr, 3, 2, "Player name (A-Z, a-z, 0-9): ")
+        safe_addstr(stdscr, 1, 2, tr('Player login - Esc: quit'))
+        name = prompt(stdscr, 3, 2, tr('Player name (A-Z, a-z, 0-9): '))
         if not name_re.match(name):
-            safe_addstr(stdscr, 5, 2, "Use only English letters and digits. Press any key...")
+            safe_addstr(stdscr, 5, 2, tr('Use only English letters and digits. Press any key...'))
             stdscr.getch()
             continue
         existing = get_player(name)
         if existing:
-            pin = prompt(stdscr, 5, 2, f"PIN for {name}: ", hidden=True)
+            pin = prompt(stdscr, 5, 2, tr("PIN for {name}: ", name=name), hidden=True)
             if pin == existing[0]:
                 return name, existing[1]
-            safe_addstr(stdscr, 7, 2, "Name taken. Wrong PIN. Press any key to retry.")
+            safe_addstr(stdscr, 7, 2, tr('Name taken. Wrong PIN. Press any key to retry.'))
             stdscr.getch()
             continue
-        pin = prompt(stdscr, 5, 2, f"Create PIN for {name} (A-Z, a-z, 0-9): ", hidden=True)
+        pin = prompt(stdscr, 5, 2, tr("Create PIN for {name} (A-Z, a-z, 0-9): ", name=name), hidden=True)
         if not name_re.match(pin):
-            safe_addstr(stdscr, 7, 2, "PIN can contain only English letters and digits. Press any key...")
+            safe_addstr(stdscr, 7, 2, tr('PIN can contain only English letters and digits. Press any key...'))
             stdscr.getch()
             continue
         create_player(name, pin)
@@ -150,7 +151,7 @@ def runner_best(name):
 def save_runner_best(name, score):
     with sqlite3.connect(DB_PATH) as conn:
         if conn.execute("SELECT 1 FROM players WHERE name = ?", (name,)).fetchone() is None:
-            raise ValueError("Unknown player")
+            raise ValueError(tr('Unknown player'))
         conn.execute(
             """INSERT INTO runner_scores (name, score) VALUES (?, ?)
             ON CONFLICT(name) DO UPDATE SET

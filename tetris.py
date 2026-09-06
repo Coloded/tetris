@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 import curses
+from i18n import tr, choose_language
 import random
 import time
 
 from players import (
-    UserExit, safe_addstr, init_db, top_players, reset_database, login, update_best,
+    UserExit, safe_addstr, init_db, top_players, reset_database, login, update_best, prompt,
 )
 
 
@@ -47,14 +48,14 @@ def draw_start(stdscr):
             page_size = max(1, height - 7)
             pages = max(1, (len(rows) + page_size - 1) // page_size)
             page = min(page, pages - 1)
-            safe_addstr(stdscr, 0, 0, "Tetris - Top 100")
-            safe_addstr(stdscr, 1, 0, f"Page {page + 1}/{pages}  Left/Right: pages")
+            safe_addstr(stdscr, 0, 0, tr('Tetris - Top 100'))
+            safe_addstr(stdscr, 1, 0, tr("Page {page}/{pages}  Left/Right: pages", page=page+1, pages=pages))
             for i, (name, score) in enumerate(rows[page * page_size:(page + 1) * page_size]):
                 rank = page * page_size + i + 1
                 safe_addstr(stdscr, 3 + i, 0, f"{rank:3}. {name[:20]:20} {score}"[:width - 1])
             if not rows:
-                safe_addstr(stdscr, 3, 0, "No players yet.")
-            safe_addstr(stdscr, height - 3, 0, "Enter: play   P: reset database   Q: quit")
+                safe_addstr(stdscr, 3, 0, tr('No players yet.'))
+            safe_addstr(stdscr, height - 3, 0, tr('Enter: play   P: reset database   Q: quit'))
             stdscr.refresh()
             ch = stdscr.getch()
             if ch in (10, 13):
@@ -66,7 +67,7 @@ def draw_start(stdscr):
             elif ch in (curses.KEY_LEFT, curses.KEY_PPAGE):
                 page = max(0, page - 1)
             elif ch in (ord("p"), ord("P")):
-                answer = prompt(stdscr, height - 2, 0, "Delete all players/scores? (y/n): ")
+                answer = prompt(stdscr, height - 2, 0, tr('Delete all players/scores? (y/n): '))
                 if answer.lower() == "y":
                     reset_database()
                     page = 0
@@ -79,11 +80,11 @@ def choose_speed(stdscr):
     try:
         while True:
             stdscr.clear()
-            safe_addstr(stdscr, 1, 2, "Select speed:")
-            safe_addstr(stdscr, 3, 2, "1) Easy   - very calm")
-            safe_addstr(stdscr, 4, 2, "2) Normal - calm")
-            safe_addstr(stdscr, 5, 2, "3) Medium - focused")
-            safe_addstr(stdscr, 6, 2, "4) Hard   - quick")
+            safe_addstr(stdscr, 1, 2, tr('Select speed:'))
+            safe_addstr(stdscr, 3, 2, tr('1) Easy   - very calm'))
+            safe_addstr(stdscr, 4, 2, tr('2) Normal - calm'))
+            safe_addstr(stdscr, 5, 2, tr('3) Medium - focused'))
+            safe_addstr(stdscr, 6, 2, tr('4) Hard   - quick'))
             stdscr.refresh()
             ch = stdscr.getch()
             key = chr(ch) if 0 <= ch < 256 else ""
@@ -128,7 +129,7 @@ class Game:
         self.board = [["." for _ in range(COLS)] for _ in range(ROWS)]
         self.score = 0
         self.paused = False
-        self.logs = ["Game restarted"]
+        self.logs = [tr('Game restarted')]
         self.game_over = False
         self.shape_stats = {name: 0 for name in SHAPES}
         self.bag = []
@@ -140,9 +141,9 @@ class Game:
             old = self.best
             self.best = self.score
             update_best(self.player, self.best)
-            self.log(f"New best score saved: {self.best}")
-            return f"New record saved! Previous best: {old}"
-        return "Record unchanged."
+            self.log(tr("New best score saved: {best}", best=self.best))
+            return tr("New record saved! Previous best: {old}", old=old)
+        return tr('Record unchanged.')
 
     def occupied(self):
         return {(self.px + x, self.py + y) for x, y in self.shape}
@@ -174,10 +175,10 @@ class Game:
         if not self.can_place(self.px, self.py, self.shape):
             self.game_over = True
             self.save_best()
-            self.log("Game over")
+            self.log(tr('Game over'))
             return
         self.shape_stats[self.piece_name] += 1
-        self.log(f"Figure: {self.piece_name}")
+        self.log(tr("Figure: {piece}", piece=self.piece_name))
 
     def landing_y(self):
         y = self.py
@@ -227,7 +228,7 @@ class Game:
             self.score += points
             word = "line" if cleared == 1 else "lines"
             point_word = "point" if points == 1 else "points"
-            self.log(f"Cleared {cleared} {word} +{points} {point_word}")
+            self.log(tr("Cleared {cleared} {word} +{points} {point_word}", cleared=cleared, word=word, points=points, point_word=point_word))
             self.save_best()
 
     def handle_key(self, ch):
@@ -245,7 +246,7 @@ class Game:
             self.last_fall = time.monotonic()
             if self.lock_since is not None:
                 self.lock_since = self.last_fall
-            self.log("Pause on" if self.paused else "Pause off")
+            self.log(tr('Pause on') if self.paused else tr('Pause off'))
             return True
         if ch in (ord("r"), ord("R")):
             self.reset()
@@ -302,10 +303,10 @@ class Game:
         s.erase()
         height, width = s.getmaxyx()
         if not self.screen_fits():
-            safe_addstr(s, 0, 0, "Paused: enlarge terminal to 52x24. Q: quit")
+            safe_addstr(s, 0, 0, tr('Paused: enlarge terminal to 52x24. Q: quit'))
             s.refresh()
             return
-        state = "GAME OVER" if self.game_over else ("PAUSED" if self.paused else "Playing")
+        state = tr('GAME OVER') if self.game_over else (tr('PAUSED') if self.paused else tr('Playing'))
         safe_addstr(s, 0, 0, "+" + "-" * (COLS * 2) + "+")
         active = self.occupied() if not self.game_over else set()
         ghost = {(self.px + x, self.landing_y() + y) for x, y in self.shape} if not self.game_over else set()
@@ -319,16 +320,16 @@ class Game:
                     self.draw_cell(r + 1, 1 + c * 2, piece)
             safe_addstr(s, r + 1, 21, "|")
         safe_addstr(s, 21, 0, "+" + "-" * (COLS * 2) + "+")
-        safe_addstr(s, 22, 0, f"Score:{self.score} Best:{self.best}"[:22])
+        safe_addstr(s, 22, 0, tr("Score:{score} Best:{best}", score=self.score, best=self.best)[:22])
         if self.paused or self.game_over:
             safe_addstr(s, 10, 5, state, curses.A_REVERSE)
-        panel = [f"{self.level} - {state}", f"Next: {self.next_piece_name}"]
+        panel = [f"{tr(self.level)} - {state}", tr("Next: {piece}", piece=self.next_piece_name)]
         preview = set(SHAPES[self.next_piece_name])
         panel += ["".join("[]" if (x, y) in preview else "  " for x in range(4)) for y in range(4)]
-        panel += ["Left/Right: move", "Up: rotate  Down: soft drop",
-                  "Space: hard drop", "P:pause R:restart Q:quit", "Stats:",
+        panel += [tr('Left/Right: move'), tr('Up: rotate  Down: soft drop'),
+                  tr('Space: hard drop'), tr('P:pause R:restart Q:quit'), tr('Stats:'),
                   " ".join(f"{k}:{self.shape_stats[k]}" for k in ("I", "O", "T", "S")),
-                  " ".join(f"{k}:{self.shape_stats[k]}" for k in ("Z", "J", "L")), "Events:"]
+                  " ".join(f"{k}:{self.shape_stats[k]}" for k in ("Z", "J", "L")), tr('Events:')]
         panel += self.logs[-max(1, height - len(panel) - 1):]
         for y, text in enumerate(panel):
             safe_addstr(s, y, 24, text[:width - 25])
@@ -359,6 +360,8 @@ def run(stdscr):
         stdscr.nodelay(True)
         stdscr.timeout(30)
         init_colors()
+        if not choose_language(stdscr):
+            raise UserExit
         init_db()
         draw_start(stdscr)
         level, delay = choose_speed(stdscr)
@@ -366,9 +369,9 @@ def run(stdscr):
         stdscr.nodelay(True)
         game = Game(stdscr, player, best, level, delay)
     except (KeyboardInterrupt, UserExit):
-        return "Interrupted.", 0, "", 0, ""
+        return tr('Interrupted.'), 0, "", 0, ""
 
-    result = "Quit."
+    result = tr('Quit.')
     try:
         running = True
         while running:
@@ -389,7 +392,7 @@ def run(stdscr):
             # Bound rendering and CPU usage even when getch() returns instantly.
             time.sleep(max(0.0, 1 / 30 - (time.monotonic() - frame_start)))
     except (KeyboardInterrupt, UserExit):
-        result = "Interrupted."
+        result = tr('Interrupted.')
 
     save_message = game.save_best()
     return result, game.score, player, game.best, save_message
@@ -398,10 +401,10 @@ def run(stdscr):
 if __name__ == "__main__":
     try:
         result, score, player, best, save_message = curses.wrapper(run)
-        print(f"{result} Score: {score}")
+        print(tr("{result} Score: {score}", result=result, score=score))
         if player:
-            print(f"Player: {player}. Best score: {best}")
+            print(tr("Player: {player}. Best score: {best}", player=player, best=best))
         if save_message:
             print(save_message)
     except KeyboardInterrupt:
-        print("Interrupted.")
+        print(tr('Interrupted.'))

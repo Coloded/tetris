@@ -7,6 +7,18 @@ Two terminal games written entirely in Python, using only the standard library:
 
 ![Current Tetris gameplay](screenshots/gameplay.png)
 
+## Language / Язык
+
+Both games start with a language selector: **1 — Русский**, **2 — English**.
+The choice applies to login/PIN prompts, menus, controls, scores and event logs
+for that run. Accounts and records are shared across languages. Player names
+and PINs still use Latin letters and digits; keyboard shortcuts stay the same.
+Keep `i18n.py` alongside `players.py` and the game scripts.
+
+Обе игры при запуске предлагают язык: **1 — Русский**, **2 — English**.
+Выбор действует на меню, вход по PIN, подсказки и события. Учётные записи и
+рекорды общие для обоих языков. Имена и PIN вводятся латиницей и цифрами.
+
 ## Requirements and launch
 
 Python 3.8+ with `curses` support on macOS or Ubuntu. No pip packages, shell
