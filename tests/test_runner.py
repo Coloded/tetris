@@ -24,6 +24,55 @@ class RunnerTests(unittest.TestCase):
                 peak = max(peak, game.altitude)
             self.assertEqual((peak, game.altitude), (5000, 0))
 
+    def test_double_up_jumps_higher_without_leaving_small_field(self):
+        for hero in dino.HEROES:
+            for delay in (0, 5, 15):
+                game = self.game(hero)
+                game.resize(16, 52)
+                game.handle_key(dino.curses.KEY_UP)
+                for _ in range(delay):
+                    game.step()
+                game.handle_key(dino.curses.KEY_UP)
+                self.assertIn('High jump!', game.logs)
+                peak = 0
+                for _ in range(100):
+                    game.step()
+                    peak = max(peak, game.altitude)
+                    self.assertGreaterEqual(game.feet - 2, 0)
+                self.assertEqual(peak, 7000)
+                self.assertEqual(game.altitude, 0)
+
+    def test_boost_only_once_and_only_double_up(self):
+        game = self.game()
+        game.handle_key(dino.curses.KEY_UP)
+        game.step()
+        game.handle_key(dino.curses.KEY_UP)
+        game.step()
+        velocity = game.velocity
+        game.handle_key(dino.curses.KEY_UP)
+        self.assertEqual(game.velocity, velocity)
+        self.assertEqual(game.logs.count('High jump!'), 1)
+        game = self.game()
+        game.handle_key(ord(' '))
+        game.step()
+        game.handle_key(dino.curses.KEY_UP)
+        self.assertNotIn('High jump!', game.logs)
+        game = self.game()
+        game.handle_key(dino.curses.KEY_UP)
+        for _ in range(20):
+            game.step()
+        game.handle_key(dino.curses.KEY_UP)
+        self.assertNotIn('High jump!', game.logs)
+
+    def test_block_render_and_collision_width_agree(self):
+        game = self.game()
+        game.obstacles = [dino.Obstacle(20000, 2)]
+        rows = game.render_rows()
+        self.assertEqual(rows[game.ground][20:24], '[][]')
+        game.obstacles[0].x = 5000
+        self.assertTrue(game.collision())  # rightmost bracket touches x=8
+        self.assertFalse(any('#' in row for row in rows))
+
     def test_birds_require_duck(self):
         for hero in dino.HEROES:
             game = self.game(hero)

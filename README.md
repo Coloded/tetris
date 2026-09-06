@@ -148,7 +148,8 @@ All three must duck under low birds or jump over obstacles.
 | Key | Action |
 | --- | --- |
 | Up / Space | Jump |
-| Down | Duck; a tap lasts 0.7 seconds, key repeat extends it |
+| Up twice quickly | High jump; press again within 0.35 seconds |
+| Down | Duck; a tap lasts 1 second, key repeat extends it |
 | P | Pause / resume |
 | R | Restart |
 | Q | Quit |
@@ -156,16 +157,22 @@ All three must duck under low birds or jump over obstacles.
 Physics advances in fixed 20 ms steps with sub-cell position and velocity.
 The curses display renders at up to 50 FPS.
 A jump reaches five cells in half a second and returns to the ground after
-one second. The terminal displays the nearest character row. Held jump does
-not immediately trigger a second jump on landing.
+one second. Press Up twice within 0.35 seconds to boost the jump to seven cells.
+Only one boost is available per jump, and Space always starts an ordinary jump.
+The seven-cell ceiling keeps the entire character visible even in the smallest
+supported window. The terminal displays the nearest character row. Held jump
+does not immediately trigger a new jump on landing; a repeated Up event inside
+the double-tap window counts as a second press.
 
 World speed rises gradually from 12 to 20 cells per second over approximately
 one minute. Score increases by ten points per second survived. The best score
 is kept for the current process only, without SQLite.
 
-Cacti are one or two cells wide and at most three cells tall. Low birds require
-ducking. Obstacle spacing reserves the maximum-speed jump distance, recovery
-and collision widths: at least 40 cells between spawn positions, with random
+Cacti and birds are drawn from colored `[]` blocks, like the Tetris pieces.
+Cacti are two or four character columns wide and at most three rows tall;
+birds span six columns. Their collision boxes match these widths. Low birds
+require ducking. Obstacle spacing reserves boosted flight, recovery
+and collision widths: at least 48 columns between spawn positions, with random
 extra space. New obstacles enter from beyond the right edge, including after
 resizing. Collision is checked on every physics step.
 

@@ -8,7 +8,14 @@ import time
 
 STEP_MS = 20
 MAX_SPEED = 20000
-MIN_GAP = 40000
+MIN_GAP = 48000
+DOUBLE_TAP_MS = 350
+MAX_ALTITUDE = 7000
+OBSTACLES = {
+    1: ("[]", "[]"),
+    2: ("[][]", "[][]", "[][]"),
+    3: ("[][][]", "  []  "),
+}
 HEROES = {
     '1': ('Human', (' oo ', '/||\\', '/  \\'), '_oo_'),
     '2': ('Dog', ('/\\/\\', ' oo>', '/__\\'), '_o_>'),
@@ -37,6 +44,8 @@ class Runner:
         self.logs = ["Ready - good luck!"]
         self.duck_until = 0
         self.last_jump = -1000
+        self.takeoff_ms = -1000
+        self.boost_available = False
         self.altitude = self.velocity = 0
         self.speed = 12000
         self.obstacles = []
@@ -55,13 +64,21 @@ class Runner:
     def feet(self):
         return self.ground - (self.altitude + 500) // 1000
 
-    def jump(self):
-        if self.altitude == 0 and not self.jump_locked:
+    def jump(self, allow_boost=False):
+        airborne = self.altitude > 0 or self.velocity < 0
+        if not airborne and not self.jump_locked:
             self.velocity = -20000
             self.ducking = False
             self.duck_until = 0
             self.jump_locked = True
             self.jumps += 1
+            self.takeoff_ms = self.sim_ms
+            self.boost_available = allow_boost
+        elif (airborne and allow_boost and self.boost_available
+              and self.sim_ms - self.takeoff_ms <= DOUBLE_TAP_MS):
+            self.velocity = -26000
+            self.boost_available = False
+            self.log("High jump!")
         self.last_jump = self.sim_ms
 
     def handle_key(self, key):
@@ -76,9 +93,9 @@ class Runner:
             self.log("Paused" if self.paused else "Resumed")
         elif not self.game_over and not self.paused:
             if key in (ord(' '), curses.KEY_UP):
-                self.jump()
+                self.jump(allow_boost=key == curses.KEY_UP)
             elif key == curses.KEY_DOWN and self.altitude == 0:
-                self.duck_until = self.sim_ms + 700
+                self.duck_until = self.sim_ms + 1000
                 self.ducking = True
         return True
 
@@ -91,14 +108,14 @@ class Runner:
         if self.obstacles:
             x = max(x, self.obstacles[-1].x + MIN_GAP)
         self.obstacles.append(Obstacle(x, kind))
-        # One-second flight + recovery and collision-box widths at max speed.
+        # Reserve boosted flight, recovery and the wider block obstacles.
         self.to_spawn = MIN_GAP + random.randrange(12001)
 
     def collision(self):
         top = self.feet if self.ducking and self.altitude == 0 else self.feet - 2
         for obstacle in self.obstacles:
             x = obstacle.x // 1000
-            right = x + (0 if obstacle.kind == 1 else 1 if obstacle.kind == 2 else 2)
+            right = x + len(OBSTACLES[obstacle.kind][0]) - 1
             ob_top = self.ground - (1 if obstacle.kind == 1 else 2)
             bottom = self.ground - (1 if obstacle.kind == 3 else 0)
             if 8 <= right and 11 >= x and top <= bottom and self.feet >= ob_top:
@@ -110,8 +127,12 @@ class Runner:
         if self.altitude > 0 or self.velocity < 0:
             self.altitude -= self.velocity * STEP_MS // 1000 + 40000 * STEP_MS**2 // 2000000
             self.velocity += 40000 * STEP_MS // 1000
+            if self.altitude >= MAX_ALTITUDE:
+                self.altitude = MAX_ALTITUDE
+                self.velocity = 0
             if self.altitude <= 0:
                 self.altitude = self.velocity = 0
+                self.boost_available = False
         self.ducking = self.altitude == 0 and self.sim_ms < self.duck_until
         if self.altitude == 0 and self.sim_ms - self.last_jump >= 200:
             self.jump_locked = False
@@ -131,7 +152,7 @@ class Runner:
             self.log("Game over - R to retry")
         else:
             for obstacle in self.obstacles:
-                right = obstacle.x // 1000 + obstacle.kind - 1
+                right = obstacle.x // 1000 + len(OBSTACLES[obstacle.kind][0]) - 1
                 if not obstacle.passed and right < 8:
                     obstacle.passed = True
                     self.passed += 1
@@ -164,12 +185,9 @@ class Runner:
         put(self.ground + 1, 0, '_' * self.width)
         for obstacle in self.obstacles:
             x = obstacle.x // 1000
-            if obstacle.kind == 3:
-                put(self.ground - 2, x, '<=>')
-                put(self.ground - 1, x, ' v ')
-            else:
-                for y in range(self.ground - obstacle.kind, self.ground + 1):
-                    put(y, x, '#' * obstacle.kind)
+            top = self.ground - (1 if obstacle.kind == 1 else 2)
+            for offset, line in enumerate(OBSTACLES[obstacle.kind]):
+                put(top + offset, x, line)
         _, sprite, duck = HEROES[self.hero]
         if self.ducking and self.altitude == 0:
             put(self.ground, 8, duck)
@@ -223,7 +241,7 @@ def draw_menu(screen):
         for y, line in enumerate(sprite, 4):
             write(screen, y, x + 3, line, color(i + 1) | curses.A_BOLD)
     write(screen, 9, 2, "Same size, speed and jump for every character.")
-    write(screen, 11, 2, "Space/Up: jump   Down: duck   P: pause")
+    write(screen, 11, 2, "Up x2: high jump   Space/Up: jump")
     write(screen, 13, 2, "1-3: choose   Q: quit", color(4))
     screen.refresh()
 
@@ -256,12 +274,10 @@ def draw_game(screen, game):
     actor(game.ground + 1, 0, '_' * game.width, curses.A_DIM)
     for obstacle in game.obstacles:
         x = obstacle.x // 1000
-        if obstacle.kind == 3:
-            actor(game.ground - 2, x, '<=>', color(3) | curses.A_BOLD)
-            actor(game.ground - 1, x, ' v ', color(3))
-        else:
-            for y in range(game.ground - obstacle.kind, game.ground + 1):
-                actor(y, x, '#' * obstacle.kind, color(2) | curses.A_BOLD)
+        top = game.ground - (1 if obstacle.kind == 1 else 2)
+        attr = color(3 if obstacle.kind == 3 else 2) | curses.A_BOLD
+        for offset, line in enumerate(OBSTACLES[obstacle.kind]):
+            actor(top + offset, x, line, attr)
     _, sprite, duck = HEROES[game.hero]
     if game.ducking and game.altitude == 0:
         actor(game.ground, 8, duck, color(1) | curses.A_BOLD)
@@ -280,17 +296,17 @@ def draw_game(screen, game):
                  f"Time:  {game.sim_ms / 1000:.1f}s", f"Speed: {game.speed / 1000:.1f} cells/s",
                  f"Passed: {game.passed}  Jumps: {game.jumps}", '',
                  'Next:', upcoming[next_obstacle.kind] if next_obstacle else 'Clear ahead', '',
-                 'Controls', 'Space / Up: jump', 'Down: duck', 'P: pause / resume',
+                 'Controls', 'Up x2: high jump', 'Space/Up: jump  Down: duck', 'P: pause / resume',
                  'R: restart   Q: quit', '', 'Events:']
         panel += game.logs[-max(1, rows - len(panel) - 1):]
         for y, line in enumerate(panel):
             attr = color(4) | curses.A_BOLD if y < 2 else color(1) if line in ('Next:', 'Controls', 'Events:') else 0
             write(screen, y, x, line, attr)
-        footer = 'R: retry   Q: quit' if game.game_over else 'Space: jump | Down: duck | P: pause'
+        footer = 'R: retry   Q: quit' if game.game_over else 'Up x2: high jump | Down: duck | P: pause'
         write(screen, game.height + 3, 0, footer, curses.A_DIM)
     else:
         write(screen, 0, 0, f"{HEROES[game.hero][0]} S:{game.score} Best:{game.best} {state}", color(4))
-        write(screen, game.height + 3, 0, 'Space/Up:jump Down:duck P:pause R:restart Q:quit')
+        write(screen, game.height + 3, 0, 'Up x2:high Space:jump Down:duck P:pause R/Q')
     screen.refresh()
 
 
