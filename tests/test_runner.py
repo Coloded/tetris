@@ -93,3 +93,45 @@ class RunnerTests(unittest.TestCase):
         game = self.game()
         game.tick(game.next_step + 100)
         self.assertEqual(game.sim_ms, 20)
+
+    def test_pause_stops_physics_and_jump(self):
+        game = self.game()
+        game.handle_key(ord('p'))
+        game.handle_key(ord(' '))
+        game.tick(game.next_step + 100)
+        self.assertEqual((game.sim_ms, game.jumps), (0, 0))
+        with patch.object(dino.time, 'monotonic', return_value=200):
+            game.handle_key(ord('p'))
+        game.tick(200)
+        self.assertEqual(game.sim_ms, 0)
+        game.tick(200.02)
+        self.assertEqual(game.sim_ms, 20)
+
+    def test_passed_obstacle_counted_once(self):
+        game = self.game()
+        game.obstacles = [dino.Obstacle(7000, 1)]
+        for _ in range(5):
+            game.step()
+        self.assertEqual(game.passed, 1)
+        self.assertIn('Cactus passed', game.logs)
+
+    def test_sidebar_and_compact_layout_fit(self):
+        class Screen:
+            def __init__(self, rows, cols):
+                self.rows, self.cols = rows, cols
+                self.text = []
+            def getmaxyx(self): return self.rows, self.cols
+            def erase(self): pass
+            def refresh(self): pass
+            def addstr(self, y, x, text, attr=0):
+                assert 0 <= y < self.rows and x + len(text) < self.cols
+                self.text.append(text)
+        for rows, cols in ((24, 80), (16, 52), (40, 120)):
+            screen = Screen(rows, cols)
+            game = self.game()
+            dino.draw_game(screen, game)
+            self.assertEqual(game.sidebar, cols >= 80)
+            self.assertTrue(any('pause' in text for text in screen.text))
+            if game.sidebar:
+                self.assertIn('Events:', screen.text)
+                self.assertIn('Controls', screen.text)

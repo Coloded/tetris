@@ -135,6 +135,12 @@ Database files and Python cache files are excluded by `.gitignore`.
 
 ## Runner
 
+The runner uses the same visual style as Tetris: colored characters and obstacles,
+a framed field, and a character selection screen with sprite previews. At 80
+columns and wider, a side panel shows score, best score, elapsed time, speed,
+jumps, cleared obstacles, the next obstacle, controls and recent events.
+Narrower windows use a compact layout. `P` pauses with an overlay on the field.
+
 Choose Human, Dog or Cockroach. Their appearance differs, but all have the same
 4 × 3 standing collision box, one-row ducking height, jump arc and world speed.
 All three must duck under low birds or jump over obstacles.
@@ -143,6 +149,7 @@ All three must duck under low birds or jump over obstacles.
 | --- | --- |
 | Up / Space | Jump |
 | Down | Duck; a tap lasts 0.7 seconds, key repeat extends it |
+| P | Pause / resume |
 | R | Restart |
 | Q | Quit |
 
