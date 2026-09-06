@@ -1,4 +1,4 @@
-# Terminal Games
+# Tetris
 
 Two terminal games written entirely in Python, using only the standard library:
 
@@ -10,8 +10,7 @@ Two terminal games written entirely in Python, using only the standard library:
 ## Requirements and launch
 
 Python 3.8+ with `curses` support on macOS or Ubuntu. No pip packages, shell
-helpers or separate SQLite command are needed. The repository retains its
-original `bash-tetris` directory name, but Bash implementations have been removed.
+helpers or separate SQLite command are needed.
 
 On Ubuntu, if Python is not installed:
 
@@ -19,7 +18,14 @@ On Ubuntu, if Python is not installed:
 sudo apt install python3
 ```
 
-From the repository directory:
+Clone the project and enter its directory:
+
+```bash
+git clone https://github.com/Coloded/tetris.git
+cd tetris
+```
+
+Launch Tetris:
 
 ```bash
 python3 tetris.py
