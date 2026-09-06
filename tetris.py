@@ -3,6 +3,7 @@
 import curses
 from i18n import tr, choose_language
 import random
+import textwrap
 import time
 
 from players import (
@@ -65,13 +66,20 @@ def choose_speed(stdscr):
 
 
 class Game:
-    def __init__(self, stdscr, player, best, level, fall_delay):
+    def __init__(self, stdscr, player, best, level, fall_delay, leaderboard=None):
         self.stdscr = stdscr
         self.player = player
         self.best = best
         self.level = level
         self.fall_delay = fall_delay
-        self.board = [["." for _ in range(COLS)] for _ in range(ROWS)]
+        self.rows = max(ROWS, stdscr.getmaxyx()[0] - 3) if stdscr else ROWS
+        self.board = [["." for _ in range(COLS)] for _ in range(self.rows)]
+        self.leaderboard = list(leaderboard or [])
+        if not any(name == player for name, _ in self.leaderboard):
+            self.leaderboard.append((player, best))
+        self.rank_page = None
+        self.rank_notice = ""
+        self.notice_until = 0
         self.score = 0
         self.logs = []
         self.paused = False
@@ -92,10 +100,12 @@ class Game:
 
     def reset(self):
         self.save_best()
-        self.board = [["." for _ in range(COLS)] for _ in range(ROWS)]
+        self.rows = max(ROWS, self.stdscr.getmaxyx()[0] - 3) if self.stdscr else ROWS
+        self.board = [["." for _ in range(COLS)] for _ in range(self.rows)]
         self.score = 0
         self.paused = False
         self.logs = [tr('Game restarted')]
+        self.notice_until = 0
         self.game_over = False
         self.shape_stats = {name: 0 for name in SHAPES}
         self.bag = []
@@ -105,11 +115,65 @@ class Game:
     def save_best(self):
         if self.score > self.best:
             old = self.best
+            self.update_ranking(self.score)
             self.best = self.score
             update_best(self.player, self.best)
             self.log(tr("New best score saved: {best}", best=self.best))
             return tr("New record saved! Previous best: {old}", old=old)
         return tr('Record unchanged.')
+
+    def ranked_players(self):
+        # Stable ordering keeps equal records in their existing order.
+        return sorted(self.leaderboard, key=lambda entry: -entry[1])
+
+    def update_ranking(self, score):
+        before = self.ranked_players()
+        old_rank = next(i for i, (name, _) in enumerate(before) if name == self.player)
+        passed = [name for name, points in before[:old_rank] if points < score]
+        self.leaderboard = [(name, score if name == self.player else points)
+                            for name, points in before]
+        if passed:
+            rank = next(i + 1 for i, (name, _) in enumerate(self.ranked_players())
+                        if name == self.player)
+            self.rank_notice = tr('Well done! Passed {names}. Rank #{rank}!',
+                                  names=', '.join(passed), rank=rank)
+            self.notice_until = time.monotonic() + 6
+            self.rank_page = None
+            self.log(self.rank_notice)
+
+    def draw_ranking(self, y, x, height, width):
+        ranked = self.ranked_players()
+        current = next(i + 1 for i, (name, _) in enumerate(ranked) if name == self.player)
+        safe_addstr(self.stdscr, y, x, tr('TOP 30 — personal bests')[:width], curses.A_BOLD)
+        safe_addstr(self.stdscr, y + 1, x,
+                    tr('You: #{rank} {name} — {score}', rank=current,
+                       name=self.player, score=self.best)[:width], curses.A_BOLD)
+        rows = max(1, height - 6)
+        columns = min(2, max(1, width // 22))
+        if columns == 2:
+            rows = min(rows, 15)
+        capacity = rows * columns
+        top = ranked[:30]
+        pages = max(1, (len(top) + capacity - 1) // capacity)
+        page = (self.rank_page or 0) % pages
+        if self.rank_page is None and current <= 30:
+            page = (current - 1) // capacity
+        self.visible_rank_page = page
+        cell_width = width // columns
+        for offset, (name, score) in enumerate(top[page * capacity:(page + 1) * capacity]):
+            rank = page * capacity + offset + 1
+            suffix = f' {score}'
+            prefix = f'{rank:2} ' + ('>' if name == self.player else ' ')
+            label = prefix + name[:max(1, cell_width - len(prefix) - len(suffix) - 1)] + suffix
+            safe_addstr(self.stdscr, y + 2 + offset % rows,
+                        x + (offset // rows) * cell_width, label[:cell_width - 1],
+                        curses.A_REVERSE if name == self.player else 0)
+        if pages > 1:
+            safe_addstr(self.stdscr, y + height - 4, x,
+                        tr('Tab: top page {page}/{pages}', page=page + 1, pages=pages)[:width])
+        if time.monotonic() < self.notice_until:
+            for i, line in enumerate(textwrap.wrap(self.rank_notice, width=width)[:3]):
+                safe_addstr(self.stdscr, y + height - 3 + i, x, line, curses.A_BOLD)
 
     def occupied(self):
         return {(self.px + x, self.py + y) for x, y in self.shape}
@@ -117,7 +181,7 @@ class Game:
     def can_place(self, px, py, shape):
         for x, y in shape:
             bx, by = px + x, py + y
-            if bx < 0 or bx >= COLS or by < 0 or by >= ROWS:
+            if bx < 0 or bx >= COLS or by < 0 or by >= self.rows:
                 return False
             if self.board[by][bx] != ".":
                 return False
@@ -187,7 +251,7 @@ class Game:
 
     def clear_lines(self):
         new_board = [row for row in self.board if any(cell == "." for cell in row)]
-        cleared = ROWS - len(new_board)
+        cleared = self.rows - len(new_board)
         if cleared:
             self.board = [["." for _ in range(COLS)] for _ in range(cleared)] + new_board
             points = SCORES.get(cleared, 0)
@@ -198,6 +262,10 @@ class Game:
             self.save_best()
 
     def handle_key(self, ch):
+        if ch == 9:
+            self.rank_page = getattr(self, "visible_rank_page", 0) + 1
+            self.notice_until = 0
+            return True
         if self.game_over:
             if ch in (ord("r"), ord("R")):
                 self.reset()
@@ -262,21 +330,21 @@ class Game:
 
     def screen_fits(self):
         height, width = self.stdscr.getmaxyx()
-        return height >= MIN_HEIGHT and width >= MIN_WIDTH
+        return height >= max(MIN_HEIGHT, self.rows + 3) and width >= MIN_WIDTH
 
     def draw(self):
         s = self.stdscr
         s.erase()
         height, width = s.getmaxyx()
         if not self.screen_fits():
-            safe_addstr(s, 0, 0, tr('Paused: enlarge terminal to 52x24. Q: quit'))
+            safe_addstr(s, 0, 0, tr('Enlarge to {width}x{height}. R: restart, Q: quit', width=MIN_WIDTH, height=max(MIN_HEIGHT, self.rows + 3))[:width - 1])
             s.refresh()
             return
         state = tr('GAME OVER') if self.game_over else (tr('PAUSED') if self.paused else tr('Playing'))
         safe_addstr(s, 0, 0, "+" + "-" * (COLS * 2) + "+")
         active = self.occupied() if not self.game_over else set()
         ghost = {(self.px + x, self.landing_y() + y) for x, y in self.shape} if not self.game_over else set()
-        for r in range(ROWS):
+        for r in range(self.rows):
             safe_addstr(s, r + 1, 0, "|")
             for c in range(COLS):
                 piece = self.piece_name if (c, r) in active else self.board[r][c]
@@ -285,10 +353,10 @@ class Game:
                 else:
                     self.draw_cell(r + 1, 1 + c * 2, piece)
             safe_addstr(s, r + 1, 21, "|")
-        safe_addstr(s, 21, 0, "+" + "-" * (COLS * 2) + "+")
-        safe_addstr(s, 22, 0, tr("Score:{score} Best:{best}", score=self.score, best=self.best)[:22])
+        safe_addstr(s, self.rows + 1, 0, "+" + "-" * (COLS * 2) + "+")
+        safe_addstr(s, self.rows + 2, 0, tr("Score:{score} Best:{best}", score=self.score, best=self.best)[:22])
         if self.paused or self.game_over:
-            safe_addstr(s, 10, 5, state, curses.A_REVERSE)
+            safe_addstr(s, self.rows // 2, 2, state, curses.A_REVERSE)
         panel = [f"{tr(self.level)} - {state}", tr("Next: {piece}", piece=self.next_piece_name)]
         preview = set(SHAPES[self.next_piece_name])
         panel += ["".join("[]" if (x, y) in preview else "  " for x in range(4)) for y in range(4)]
@@ -296,9 +364,15 @@ class Game:
                   tr('Space: hard drop'), tr('P:pause R:restart Q:quit'), tr('Stats:'),
                   " ".join(f"{k}:{self.shape_stats[k]}" for k in ("I", "O", "T", "S")),
                   " ".join(f"{k}:{self.shape_stats[k]}" for k in ("Z", "J", "L")), tr('Events:')]
-        panel += self.logs[-max(1, height - len(panel) - 1):]
+        wide = width >= 100
+        if wide:
+            panel += self.logs[-max(1, height - len(panel) - 1):]
         for y, text in enumerate(panel):
-            safe_addstr(s, y, 24, text[:width - 25])
+            safe_addstr(s, y, 24, text[:32 if wide else width - 25])
+        if wide:
+            self.draw_ranking(0, 58, height, width - 59)
+        else:
+            self.draw_ranking(14, 24, height - 14, width - 25)
         s.refresh()
 
 
@@ -332,7 +406,7 @@ def run(stdscr):
         player, best = authenticate(stdscr, selector=draw_start)
         level, delay = choose_speed(stdscr)
         stdscr.nodelay(True)
-        game = Game(stdscr, player, best, level, delay)
+        game = Game(stdscr, player, best, level, delay, leaderboard=top_players(limit=-1))
     except (KeyboardInterrupt, UserExit):
         return tr('Interrupted.'), 0, "", 0, ""
 
@@ -348,6 +422,8 @@ def run(stdscr):
                 if game.lock_since is not None:
                     game.lock_since = game.last_fall
                 running = ch not in (ord("q"), ord("Q"))
+                if ch in (ord("r"), ord("R")):
+                    game.reset()
             else:
                 if ch != -1:
                     running = game.handle_key(ch)

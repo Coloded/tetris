@@ -3,6 +3,12 @@ import curses
 
 _language = 'en'
 RU = {
+    'TOP 30 — personal bests': 'ТОП-30 — личные рекорды',
+    'You: #{rank} {name} — {score}': 'Вы: №{rank} {name} — {score}',
+    'Tab: top page {page}/{pages}': 'Tab: топ {page}/{pages}',
+    'Well done! Passed {names}. Rank #{rank}!': 'Поздравляем! Вы обошли {names}. Место №{rank}!',
+    'Enlarge to {width}x{height}. R: restart, Q: quit': 'Окно {width}x{height}. R: заново, Q: выход',
+
     'Player login - Esc: back': 'Вход игрока — Esc: к списку',
     'Name taken. Choose another or Esc for the list.': 'Имя занято. Другое имя или Esc: к списку.',
     'Players - choose a number or press Enter': 'Игроки — выберите номер или нажмите Enter',

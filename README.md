@@ -55,7 +55,20 @@ play until enlarged; `Q` still quits.
 
 ## Tetris rules
 
-The board is 10 × 20. All seven classic pieces contain exactly four cells:
+The board is 10 cells wide and fills the terminal height, leaving two border
+rows and one score row: a 120 × 30 terminal gives a 10 × 27 field. Height is
+chosen at the start of each round. Shrinking the window pauses the round;
+restore its size to continue, or press **R** to restart with the new height.
+
+A live **top 30** of this installation's players appears beside the field,
+ranked by personal best. At 120 × 30 it shows all 30 places in two columns.
+Smaller windows use **Tab** to page through the list; your rank is always shown
+above it, even outside the top 30. Your row is highlighted and the list follows
+your improved rank. Beating another player's record shows a six-second
+congratulation; tying it does not. Restarting preserves your personal best.
+Other players' records are loaded when you enter the game.
+
+All seven classic pieces contain exactly four cells:
 
 ```text
 I: [][][][]    O: [][]    T: [][][]
