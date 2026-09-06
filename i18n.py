@@ -3,6 +3,15 @@ import curses
 
 _language = 'en'
 RU = {
+    'Player login - Esc: back': 'Вход игрока — Esc: к списку',
+    'Name taken. Choose another or Esc for the list.': 'Имя занято. Другое имя или Esc: к списку.',
+    'Players - choose a number or press Enter': 'Игроки — выберите номер или нажмите Enter',
+    'Number + Enter: PIN | Enter: new player': 'Номер + Enter: PIN | Enter: новый игрок',
+    'P: reset database | Q/Esc: quit': 'P: очистить базу | Q/Esc: выход',
+    'Q/Esc: quit': 'Q/Esc: выход',
+    'Player number: {number}': 'Номер игрока: {number}',
+    'No such number. Enter a number from the list.': 'Нет такого номера. Введите номер из списка.',
+
     'Player login - Esc: quit': 'Вход игрока — Esc: выход',
     'Player name (A-Z, a-z, 0-9): ': 'Имя (латиница и цифры): ',
     'Use only English letters and digits. Press any key...': 'Только латиница и цифры. Нажмите клавишу...',

@@ -335,7 +335,7 @@ def run(screen):
         return 0, 0
     players.init_db()
     try:
-        player, _ = players.login(screen)
+        player, _ = players.authenticate(screen, game="runner")
     except players.UserExit:
         return 0, 0
     best = players.runner_best(player)

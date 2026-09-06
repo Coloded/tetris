@@ -65,12 +65,12 @@ class LanguageTests(unittest.TestCase):
         with patch.object(players, 'prompt', side_effect=['Alice', '1234']) as prompt:
             with patch.object(players, 'get_player', return_value=('1234', 10)):
                 self.assertEqual(players.login(screen), ('Alice', 10))
-        self.assertIn('Вход игрока — Esc: выход', screen.messages)
+        self.assertIn('Вход игрока — Esc: к списку', screen.messages)
         self.assertEqual(prompt.call_args.args[3], 'PIN игрока Alice: ')
 
     def test_reset_confirmation_available_after_shared_login_refactor(self):
         with patch.object(tetris, 'top_players', return_value=[]):
-            with patch.object(tetris, 'prompt', return_value='n'):
-                with patch.object(tetris, 'reset_database') as reset:
+            with patch.object(players, 'prompt', return_value='n'):
+                with patch.object(players, 'reset_database') as reset:
                     tetris.draw_start(Screen(keys=[ord('p'), 10]))
                     reset.assert_not_called()

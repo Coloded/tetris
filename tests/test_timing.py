@@ -105,7 +105,7 @@ class PythonGameTests(unittest.TestCase):
     def test_top_100_all_accessible(self):
         class Screen:
             def __init__(self):
-                self.keys = iter([tetris.curses.KEY_RIGHT] * 5 + [10])
+                self.keys = iter([tetris.curses.KEY_RIGHT] * 6 + [10])
                 self.text = []
             def getmaxyx(self): return (24, 80)
             def nodelay(self, value): pass

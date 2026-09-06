@@ -6,7 +6,7 @@ import random
 import time
 
 from players import (
-    UserExit, safe_addstr, init_db, top_players, reset_database, login, update_best, prompt,
+    UserExit, safe_addstr, init_db, top_players, update_best, choose_player, authenticate,
 )
 
 
@@ -38,41 +38,7 @@ PIECE_COLORS = {"I": 1, "O": 2, "T": 3, "S": 4, "Z": 5, "J": 6, "L": 7}
 
 
 def draw_start(stdscr):
-    page = 0
-    stdscr.nodelay(False)
-    try:
-        while True:
-            stdscr.erase()
-            height, width = stdscr.getmaxyx()
-            rows = top_players()
-            page_size = max(1, height - 7)
-            pages = max(1, (len(rows) + page_size - 1) // page_size)
-            page = min(page, pages - 1)
-            safe_addstr(stdscr, 0, 0, tr('Tetris - Top 100'))
-            safe_addstr(stdscr, 1, 0, tr("Page {page}/{pages}  Left/Right: pages", page=page+1, pages=pages))
-            for i, (name, score) in enumerate(rows[page * page_size:(page + 1) * page_size]):
-                rank = page * page_size + i + 1
-                safe_addstr(stdscr, 3 + i, 0, f"{rank:3}. {name[:20]:20} {score}"[:width - 1])
-            if not rows:
-                safe_addstr(stdscr, 3, 0, tr('No players yet.'))
-            safe_addstr(stdscr, height - 3, 0, tr('Enter: play   P: reset database   Q: quit'))
-            stdscr.refresh()
-            ch = stdscr.getch()
-            if ch in (10, 13):
-                return
-            if ch in (ord("q"), ord("Q")):
-                raise UserExit
-            if ch in (curses.KEY_RIGHT, curses.KEY_NPAGE):
-                page = min(page + 1, pages - 1)
-            elif ch in (curses.KEY_LEFT, curses.KEY_PPAGE):
-                page = max(0, page - 1)
-            elif ch in (ord("p"), ord("P")):
-                answer = prompt(stdscr, height - 2, 0, tr('Delete all players/scores? (y/n): '))
-                if answer.lower() == "y":
-                    reset_database()
-                    page = 0
-    except KeyboardInterrupt as exc:
-        raise UserExit from exc
+    return choose_player(stdscr, rows=top_players(limit=-1))
 
 
 def choose_speed(stdscr):
@@ -363,9 +329,8 @@ def run(stdscr):
         if not choose_language(stdscr):
             raise UserExit
         init_db()
-        draw_start(stdscr)
+        player, best = authenticate(stdscr, selector=draw_start)
         level, delay = choose_speed(stdscr)
-        player, best = login(stdscr)
         stdscr.nodelay(True)
         game = Game(stdscr, player, best, level, delay)
     except (KeyboardInterrupt, UserExit):

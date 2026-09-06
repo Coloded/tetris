@@ -73,3 +73,55 @@ class PlayerTests(unittest.TestCase):
     def test_record_requires_existing_name(self):
         with self.assertRaises(ValueError):
             players.save_runner_best('Unknown', 100)
+
+
+class SelectionScreen(Screen):
+    def __init__(self, keys):
+        super().__init__()
+        self.keys = iter(keys)
+    def getmaxyx(self): return (24, 52)
+    def nodelay(self, value): pass
+    def erase(self): pass
+    def refresh(self): pass
+    def getch(self): return next(self.keys)
+
+
+class SelectionTests(unittest.TestCase):
+    setUp = PlayerTests.setUp
+    def test_enter_means_new_account(self):
+        screen = SelectionScreen([10])
+        self.assertIsNone(players.choose_player(screen, rows=[('Alice', 10)]))
+
+    def test_multidigit_number_and_invalid_number(self):
+        rows = [(f'Player{i}', 0) for i in range(1, 121)]
+        screen = SelectionScreen([ord('9'), ord('9'), ord('9'), 10, ord('1'), ord('0'), ord('0'), 10])
+        self.assertEqual(players.choose_player(screen, rows=rows), 'Player100')
+        self.assertTrue(any('No such number' in s for s in screen.messages))
+
+    def test_selected_player_only_asks_pin_and_retries(self):
+        players.create_player('Alice', '1234')
+        with patch.object(players, 'prompt', side_effect=['9999', '1234']) as prompt:
+            self.assertEqual(players.login(Screen(), selected_name='Alice'), ('Alice', 0))
+        self.assertEqual(prompt.call_count, 2)
+        self.assertTrue(all('PIN for Alice' in call.args[3] for call in prompt.call_args_list))
+
+    def test_registration_rejects_occupied_name(self):
+        players.create_player('Alice', '1234')
+        with patch.object(players, 'prompt', side_effect=['Alice', 'Bob', '5678']) as prompt:
+            self.assertEqual(players.login(Screen(), new_only=True), ('Bob', 0))
+        self.assertFalse(any('PIN for Alice' in call.args[3] for call in prompt.call_args_list))
+        self.assertEqual(players.get_player('Alice')[0], '1234')
+
+    def test_escape_returns_to_list_then_new_account(self):
+        players.create_player('Alice', '1234')
+        with patch.object(players, 'choose_player', side_effect=['Alice', None]) as choose:
+            with patch.object(players, 'prompt', side_effect=[players.LoginBack(), 'Bob', '5678']):
+                self.assertEqual(players.authenticate(Screen()), ('Bob', 0))
+        self.assertEqual(choose.call_count, 2)
+
+    def test_runner_list_uses_runner_scores(self):
+        players.create_player('Alice', '1234')
+        players.create_player('Bob', '5678')
+        players.update_best('Alice', 100)
+        players.save_runner_best('Bob', 20)
+        self.assertEqual(players.account_rows('runner'), [('Bob', 20), ('Alice', 0)])

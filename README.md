@@ -136,10 +136,14 @@ lines are cleared, with a final check on restart or exit.
 Existing players and records are preserved. Old records may have been earned
 with the previous larger pieces and five-line scoring rule.
 
-The start screen lists the top 100 players across pages:
+The start screen lists all saved players, ranked by best score, across pages:
 
 - Left/Right or Page Up/Page Down moves between pages.
-- Enter continues to speed selection and player login.
+- Type a player's number and press Enter to enter only that player's PIN.
+- Press Enter with no number to enter a new name and create a PIN. Existing
+  names cannot be registered again.
+- Esc from login/registration returns to the player list.
+- After successful login, choose the Tetris speed or runner character.
 - `P` resets the local database **only after confirmation** on the start screen.
   During gameplay `P` only pauses; it cannot erase the database.
 
@@ -153,11 +157,12 @@ columns and wider, a side panel shows score, best score, player name, speed,
 jumps, cleared obstacles, the next obstacle, controls and recent events.
 Narrower windows use a compact layout. `P` pauses with an overlay on the field.
 
-At startup, enter your player name and PIN before choosing a character. An
+After language selection, choose a player by number and Enter, or press an
+empty Enter to register a new name. Then choose a character. An
 existing name is locked to its PIN: an incorrect PIN cannot start a game or
 replace the account. Choose another name or retry. For an unused name, create
 a PIN. Names and new PINs use English letters and digits; PIN entry is masked.
-`Esc` exits login. Existing Tetris accounts work in the runner too.
+`Esc` returns to the player list. Existing Tetris accounts work in the runner too.
 
 Choose Human, Dog or Cockroach. Their appearance differs, but all have the same
 4 × 3 standing collision box, one-row ducking height, jump arc and world speed.
