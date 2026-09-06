@@ -42,7 +42,7 @@ class RunnerTests(unittest.TestCase):
                 self.assertEqual(peak, 7000)
                 self.assertEqual(game.altitude, 0)
 
-    def test_boost_only_once_and_only_double_up(self):
+    def test_boost_once_with_either_key_and_late_second_press(self):
         game = self.game()
         game.handle_key(dino.curses.KEY_UP)
         game.step()
@@ -56,13 +56,13 @@ class RunnerTests(unittest.TestCase):
         game.handle_key(ord(' '))
         game.step()
         game.handle_key(dino.curses.KEY_UP)
-        self.assertNotIn('High jump!', game.logs)
+        self.assertIn('High jump!', game.logs)
         game = self.game()
         game.handle_key(dino.curses.KEY_UP)
         for _ in range(20):
             game.step()
         game.handle_key(dino.curses.KEY_UP)
-        self.assertNotIn('High jump!', game.logs)
+        self.assertIn('High jump!', game.logs)
 
     def test_block_render_and_collision_width_agree(self):
         game = self.game()
@@ -72,6 +72,21 @@ class RunnerTests(unittest.TestCase):
         game.obstacles[0].x = 5000
         self.assertTrue(game.collision())  # rightmost bracket touches x=8
         self.assertFalse(any('#' in row for row in rows))
+
+    def test_reported_wide_cactus_collision_with_double_jump(self):
+        # Regression: the old high jump landed onto this cactus even with a boost.
+        for delay in (100, 300, 500, 700):
+            game = self.game()
+            game.obstacles = [dino.Obstacle(24000, 2)]
+            game.handle_key(dino.curses.KEY_UP)
+            for _ in range(200):
+                if game.sim_ms == delay:
+                    game.handle_key(dino.curses.KEY_UP)
+                game.step()
+                if game.game_over or game.passed:
+                    break
+            self.assertFalse(game.game_over, delay)
+            self.assertEqual(game.passed, 1, delay)
 
     def test_birds_require_duck(self):
         for hero in dino.HEROES:

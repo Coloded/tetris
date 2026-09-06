@@ -5,11 +5,13 @@ import curses
 from dataclasses import dataclass
 import random
 import time
+import math
+
+import players
 
 STEP_MS = 20
 MAX_SPEED = 20000
-MIN_GAP = 48000
-DOUBLE_TAP_MS = 350
+MIN_GAP = 80000
 MAX_ALTITUDE = 7000
 OBSTACLES = {
     1: ("[]", "[]"),
@@ -31,22 +33,25 @@ class Obstacle:
 
 
 class Runner:
-    def __init__(self, hero='1'):
+    def __init__(self, hero='1', player=None, best=0):
         self.hero = hero
-        self.best = 0
+        self.player = player
+        self.best = self.saved_best = best
         self.width, self.height = 77, 19
         self.reset()
 
     def reset(self):
+        if hasattr(self, "score"):
+            self.save_best()
         self.score = self.sim_ms = self.steps = 0
         self.game_over = self.ducking = self.jump_locked = self.paused = False
         self.jumps = self.passed = 0
         self.logs = ["Ready - good luck!"]
         self.duck_until = 0
         self.last_jump = -1000
-        self.takeoff_ms = -1000
         self.boost_available = False
         self.altitude = self.velocity = 0
+        self.gravity = 40000
         self.speed = 12000
         self.obstacles = []
         self.to_spawn = 15000
@@ -64,19 +69,27 @@ class Runner:
     def feet(self):
         return self.ground - (self.altitude + 500) // 1000
 
-    def jump(self, allow_boost=False):
+    def save_best(self):
+        if self.player is not None and self.best > self.saved_best:
+            players.save_runner_best(self.player, self.best)
+            self.saved_best = self.best
+
+    def jump(self, allow_boost=True):
         airborne = self.altitude > 0 or self.velocity < 0
         if not airborne and not self.jump_locked:
             self.velocity = -20000
+            self.gravity = 40000
             self.ducking = False
             self.duck_until = 0
             self.jump_locked = True
             self.jumps += 1
-            self.takeoff_ms = self.sim_ms
-            self.boost_available = allow_boost
-        elif (airborne and allow_boost and self.boost_available
-              and self.sim_ms - self.takeoff_ms <= DOUBLE_TAP_MS):
-            self.velocity = -26000
+            self.boost_available = True
+        elif airborne and allow_boost and self.boost_available:
+            # Reach the same visible ceiling with a slower, longer arc, rather
+            # than slamming into it and immediately falling onto a wide cactus.
+            self.gravity = 16000
+            remaining = max(0, MAX_ALTITUDE - self.altitude)
+            self.velocity = -math.isqrt(2 * self.gravity * remaining)
             self.boost_available = False
             self.log("High jump!")
         self.last_jump = self.sim_ms
@@ -93,7 +106,7 @@ class Runner:
             self.log("Paused" if self.paused else "Resumed")
         elif not self.game_over and not self.paused:
             if key in (ord(' '), curses.KEY_UP):
-                self.jump(allow_boost=key == curses.KEY_UP)
+                self.jump()
             elif key == curses.KEY_DOWN and self.altitude == 0:
                 self.duck_until = self.sim_ms + 1000
                 self.ducking = True
@@ -125,8 +138,8 @@ class Runner:
     def step(self):
         self.sim_ms += STEP_MS
         if self.altitude > 0 or self.velocity < 0:
-            self.altitude -= self.velocity * STEP_MS // 1000 + 40000 * STEP_MS**2 // 2000000
-            self.velocity += 40000 * STEP_MS // 1000
+            self.altitude -= self.velocity * STEP_MS // 1000 + self.gravity * STEP_MS**2 // 2000000
+            self.velocity += self.gravity * STEP_MS // 1000
             if self.altitude >= MAX_ALTITUDE:
                 self.altitude = MAX_ALTITUDE
                 self.velocity = 0
@@ -148,6 +161,8 @@ class Runner:
         self.score = self.sim_ms // 100
         self.best = max(self.best, self.score)
         self.game_over = self.collision()
+        if self.game_over or self.sim_ms % 1000 == 0:
+            self.save_best()
         if self.game_over:
             self.log("Game over - R to retry")
         else:
@@ -230,7 +245,7 @@ def init_colors():
         pass
 
 
-def draw_menu(screen):
+def draw_menu(screen, player=None):
     screen.erase()
     rows, cols = screen.getmaxyx()
     write(screen, 0, 2, "RUNNER / Choose your character", color(1) | curses.A_BOLD)
@@ -240,8 +255,9 @@ def draw_menu(screen):
         write(screen, 2, x, f"[{key}] {name}", color(i + 1) | curses.A_BOLD)
         for y, line in enumerate(sprite, 4):
             write(screen, y, x + 3, line, color(i + 1) | curses.A_BOLD)
+    write(screen, 8, 2, f"Player: {player}" if player else "")
     write(screen, 9, 2, "Same size, speed and jump for every character.")
-    write(screen, 11, 2, "Up x2: high jump   Space/Up: jump")
+    write(screen, 11, 2, "Up/Space twice: high jump")
     write(screen, 13, 2, "1-3: choose   Q: quit", color(4))
     screen.refresh()
 
@@ -293,20 +309,20 @@ def draw_game(screen, game):
         next_obstacle = next((o for o in game.obstacles if not o.passed), None)
         upcoming = {1: 'Cactus - jump', 2: 'Tall cactus - jump', 3: 'Bird - duck'}
         panel = [f"Score: {game.score}", f"Best:  {game.best}",
-                 f"Time:  {game.sim_ms / 1000:.1f}s", f"Speed: {game.speed / 1000:.1f} cells/s",
+                 f"Player: {game.player or '-'}", f"Speed: {game.speed / 1000:.1f} cells/s",
                  f"Passed: {game.passed}  Jumps: {game.jumps}", '',
                  'Next:', upcoming[next_obstacle.kind] if next_obstacle else 'Clear ahead', '',
-                 'Controls', 'Up x2: high jump', 'Space/Up: jump  Down: duck', 'P: pause / resume',
+                 'Controls', 'Up/Space x2: high jump', 'Space/Up: jump  Down: duck', 'P: pause / resume',
                  'R: restart   Q: quit', '', 'Events:']
         panel += game.logs[-max(1, rows - len(panel) - 1):]
         for y, line in enumerate(panel):
             attr = color(4) | curses.A_BOLD if y < 2 else color(1) if line in ('Next:', 'Controls', 'Events:') else 0
             write(screen, y, x, line, attr)
-        footer = 'R: retry   Q: quit' if game.game_over else 'Up x2: high jump | Down: duck | P: pause'
+        footer = 'R: retry   Q: quit' if game.game_over else 'Up/Space x2: high | Down: duck | P: pause'
         write(screen, game.height + 3, 0, footer, curses.A_DIM)
     else:
-        write(screen, 0, 0, f"{HEROES[game.hero][0]} S:{game.score} Best:{game.best} {state}", color(4))
-        write(screen, game.height + 3, 0, 'Up x2:high Space:jump Down:duck P:pause R/Q')
+        write(screen, 0, 0, f"{game.player or HEROES[game.hero][0]} S:{game.score} Best:{game.best} {state}", color(4))
+        write(screen, game.height + 3, 0, 'Up/Space x2:high Down:duck P:pause R/Q')
     screen.refresh()
 
 
@@ -314,29 +330,38 @@ def run(screen):
     curses.curs_set(0)
     init_colors()
     screen.keypad(True)
+    players.init_db()
+    try:
+        player, _ = players.login(screen)
+    except players.UserExit:
+        return 0, 0
+    best = players.runner_best(player)
     screen.timeout(100)
     while True:
-        draw_menu(screen)
+        draw_menu(screen, player)
         key = screen.getch()
         if key in (ord('q'), ord('Q')):
             return 0, 0
         if key in (ord('1'), ord('2'), ord('3')):
-            game = Runner(chr(key))
+            game = Runner(chr(key), player=player, best=best)
             break
-    screen.nodelay(True)
-    while True:
-        start = time.monotonic()
-        key = screen.getch()
-        fits = game.resize(*screen.getmaxyx())
-        if key in (ord('q'), ord('Q')):
-            break
-        if fits:
-            game.handle_key(key)
-            game.tick(time.monotonic())
-        else:
-            game.next_step = time.monotonic() + STEP_MS / 1000
-        draw_game(screen, game)
-        time.sleep(max(0, 1 / 50 - (time.monotonic() - start)))
+    try:
+        screen.nodelay(True)
+        while True:
+            start = time.monotonic()
+            key = screen.getch()
+            fits = game.resize(*screen.getmaxyx())
+            if key in (ord('q'), ord('Q')):
+                break
+            if fits:
+                game.handle_key(key)
+                game.tick(time.monotonic())
+            else:
+                game.next_step = time.monotonic() + STEP_MS / 1000
+            draw_game(screen, game)
+            time.sleep(max(0, 1 / 50 - (time.monotonic() - start)))
+    finally:
+        game.save_best()
     return game.score, game.best
 
 

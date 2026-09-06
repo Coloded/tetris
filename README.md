@@ -115,8 +115,8 @@ Points are awarded only for completed rows:
 | 3 | 6 |
 | 4 | 24 |
 
-Tetris stores `tetris_scores.sqlite3` beside its script. The database contains
-each player's name, PIN,
+Both games share `tetris_scores.sqlite3` beside the scripts via `players.py`.
+Keep `players.py` with the game scripts. The database contains each player's name, PIN,
 best score and timestamps. Names and new PINs use English letters and digits.
 PINs are stored as plain text for this local game. Beaten records are saved when
 lines are cleared, with a final check on restart or exit.
@@ -137,9 +137,15 @@ Database files and Python cache files are excluded by `.gitignore`.
 
 The runner uses the same visual style as Tetris: colored characters and obstacles,
 a framed field, and a character selection screen with sprite previews. At 80
-columns and wider, a side panel shows score, best score, elapsed time, speed,
+columns and wider, a side panel shows score, best score, player name, speed,
 jumps, cleared obstacles, the next obstacle, controls and recent events.
 Narrower windows use a compact layout. `P` pauses with an overlay on the field.
+
+At startup, enter your player name and PIN before choosing a character. An
+existing name is locked to its PIN: an incorrect PIN cannot start a game or
+replace the account. Choose another name or retry. For an unused name, create
+a PIN. Names and new PINs use English letters and digits; PIN entry is masked.
+`Esc` exits login. Existing Tetris accounts work in the runner too.
 
 Choose Human, Dog or Cockroach. Their appearance differs, but all have the same
 4 × 3 standing collision box, one-row ducking height, jump arc and world speed.
@@ -148,7 +154,7 @@ All three must duck under low birds or jump over obstacles.
 | Key | Action |
 | --- | --- |
 | Up / Space | Jump |
-| Up twice quickly | High jump; press again within 0.35 seconds |
+| Up / Space again while airborne | Boost the jump once; no double-tap deadline |
 | Down | Duck; a tap lasts 1 second, key repeat extends it |
 | P | Pause / resume |
 | R | Restart |
@@ -157,22 +163,25 @@ All three must duck under low birds or jump over obstacles.
 Physics advances in fixed 20 ms steps with sub-cell position and velocity.
 The curses display renders at up to 50 FPS.
 A jump reaches five cells in half a second and returns to the ground after
-one second. Press Up twice within 0.35 seconds to boost the jump to seven cells.
-Only one boost is available per jump, and Space always starts an ordinary jump.
+one second. Press Up or Space again at any point while airborne for a higher,
+longer jump. The boost uses gentler gravity and reaches seven cells without
+cutting the flight short. Both keys work together, and only one boost is
+available before landing.
 The seven-cell ceiling keeps the entire character visible even in the smallest
 supported window. The terminal displays the nearest character row. Held jump
-does not immediately trigger a new jump on landing; a repeated Up event inside
-the double-tap window counts as a second press.
+does not immediately trigger a new jump on landing. Terminals report key repeats
+as presses, so holding a jump key may consume the single airborne boost.
 
 World speed rises gradually from 12 to 20 cells per second over approximately
-one minute. Score increases by ten points per second survived. The best score
-is kept for the current process only, without SQLite.
+one minute. Score increases by ten points per second survived. Each player's best runner score is saved in a separate `runner_scores` table,
+independently of their Tetris record. It is saved once per second, on game over,
+restart and normal exit (including Ctrl-C), and restored after the next login.
 
 Cacti and birds are drawn from colored `[]` blocks, like the Tetris pieces.
 Cacti are two or four character columns wide and at most three rows tall;
 birds span six columns. Their collision boxes match these widths. Low birds
 require ducking. Obstacle spacing reserves boosted flight, recovery
-and collision widths: at least 48 columns between spawn positions, with random
+and collision widths: at least 80 columns between spawn positions, with random
 extra space. New obstacles enter from beyond the right edge, including after
 resizing. Collision is checked on every physics step.
 
