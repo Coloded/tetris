@@ -43,7 +43,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS users_ranking ON users(best DESC,best_at,id);
         ''')
         columns={row['name'] for row in con.execute('PRAGMA table_info(users)')}
-        for name,definition in (('country','TEXT'),('country_checked','INTEGER NOT NULL DEFAULT 0'),('country_changed','INTEGER NOT NULL DEFAULT 0')):
+        for name,definition in (('country','TEXT'),('country_checked','INTEGER NOT NULL DEFAULT 0'),('country_changed','INTEGER NOT NULL DEFAULT 0'),('hidden','INTEGER NOT NULL DEFAULT 0'),('privacy_version','INTEGER NOT NULL DEFAULT 0')):
             if name not in columns: con.execute(f'ALTER TABLE users ADD COLUMN {name} {definition}')
         con.execute('CREATE INDEX IF NOT EXISTS users_country_ranking ON users(country,best DESC,best_at,id)')
 
@@ -76,6 +76,10 @@ async def bounds(request: Request, call_next):
 class Login(BaseModel):
     model_config=ConfigDict(extra='forbid')
     init_data: str=Field(min_length=1,max_length=16384)
+
+class PrivacyChange(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    hidden: bool
 
 class CountryChange(BaseModel):
     model_config=ConfigDict(extra='forbid',strict=True)
@@ -124,17 +128,20 @@ def identity(request):
 
 
 def ranked_rows(con,uid,country=None):
-    where='WHERE country=?' if country else ''
-    params=(country,uid) if country else (uid,)
+    # Filter BEFORE numbering: hidden accounts occupy no public ranking slot.
+    # Only the requesting player can include their own hidden row for comparison.
+    where='WHERE (hidden=0 OR id=?)'+(' AND country=?' if country else '')
+    params=(uid,country,uid) if country else (uid,uid)
     sql=f'SELECT id,name,best,country,ROW_NUMBER() OVER (ORDER BY best DESC,best_at ASC,id ASC) AS rank FROM users {where}'
     rows=con.execute(f'SELECT * FROM ({sql}) WHERE rank<=30 OR id=? ORDER BY rank',params).fetchall()
     entries=[{'name':r['name'],'score':r['best'],'rank':r['rank'],'me':r['id']==uid,'country':r['country']} for r in rows]
     return {'top':[r for r in entries if r['rank']<=30],'me':next((r for r in entries if r['me']),None)}
 
 def ranking(con,uid):
-    user=con.execute('SELECT country,country_changed FROM users WHERE id=?',(uid,)).fetchone()
+    user=con.execute('SELECT country,country_changed,hidden,privacy_version FROM users WHERE id=?',(uid,)).fetchone()
     world=ranked_rows(con,uid)
     local=ranked_rows(con,uid,user['country']) if user['country'] else {'top':[],'me':None}
+    world['privacy']={'hidden':bool(user['hidden']),'version':user['privacy_version']}
     world['country']={'code':user['country'],'can_change':not bool(user['country_changed']),**local}
     return world
 
@@ -203,6 +210,15 @@ def leaderboard(request: Request):
     uid=identity(request)
     with db() as con: return ranking(con,uid)
 
+@app.post('/api/privacy')
+def change_privacy(payload: PrivacyChange, request: Request):
+    uid=identity(request)
+    with db() as con:
+        con.execute('BEGIN IMMEDIATE')
+        con.execute('UPDATE users SET hidden=?,privacy_version=privacy_version+1 WHERE id=? AND hidden!=?',
+                    (int(payload.hidden),uid,int(payload.hidden)))
+        return ranking(con,uid)
+
 @app.post('/api/country')
 def change_country(payload: CountryChange, request: Request):
     uid=identity(request)
@@ -248,6 +264,9 @@ def steps(game_id: str, payload: Batch, request: Request):
             if row['last_hash']!=digest: raise HTTPException(409,'Conflicting retry')
             response=json.loads(row['last_response'])
             response['leaderboard']=ranking(con,uid)
+            # Historical congratulation names may now belong to hidden users.
+            response['passed']=[]
+            response['passed_country']=[]
             return response
         if row['finished']: raise HTTPException(409,'Game finished or replaced')
         if row['seq']+1!=payload.seq: raise HTTPException(409,'Out of order')

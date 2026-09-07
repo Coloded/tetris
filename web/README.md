@@ -21,6 +21,12 @@ PNGs are preserved. `prompts.json` records the original imagegen prompts.
 
 ## Identity and records
 
+The leaderboard includes a reversible **Quiet mode** switch. SQLite stores each
+account's `hidden` flag. Hidden accounts are excluded before ranking for other
+players in both world and country lists, but the owner sees their own position
+among public players. Records continue to save. Hidden players are also excluded
+from overtaking notices; privacy changes are reflected on the next refresh.
+
 Only Telegram ID and the Telegram first/last name from server-validated
 `initData` establish the account. There is no PIN, editable nickname or name
 registration. Names refresh on login and are rendered as text. Telegram IDs
