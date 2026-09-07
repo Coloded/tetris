@@ -189,7 +189,7 @@ def auth(payload: Login, request: Request):
     token=secrets.token_urlsafe(32);now=time.time()
     with db() as con:
         con.execute('INSERT INTO users(id,name,best_at) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name',(uid,name,now))
-        claimed=con.execute('UPDATE users SET country_checked=1 WHERE id=? AND country_checked=0',(uid,)).rowcount
+        claimed=con.execute('UPDATE users SET country_checked=1 WHERE id=? AND country_checked=0 AND country IS NULL',(uid,)).rowcount
     # Claim once in SQLite before the external request; concurrent logins do not
     # look up again. Provider failure leaves the one-time manual choice available.
     if claimed:

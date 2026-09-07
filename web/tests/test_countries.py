@@ -27,6 +27,16 @@ class CountryTests(unittest.TestCase):
             self.assertIsNone(response.json()['leaderboard']['country']['code'])
             self.assertTrue(response.json()['leaderboard']['country']['can_change'])
 
+    def test_saved_country_never_calls_provider_even_with_legacy_flag(self):
+        with module.db() as con:
+            con.execute("UPDATE users SET country='RU',country_checked=0 WHERE id=123")
+        with patch.object(module,'country_for_ip') as lookup:
+            for _ in range(3):
+                result=self.client.post('/api/auth',json={'init_data':signed()})
+                self.assertEqual(result.status_code,200)
+                self.assertEqual(result.json()['leaderboard']['country']['code'],'RU')
+            lookup.assert_not_called()
+
     def test_once_only_with_retry_relogin_and_same_country(self):
         with module.db() as con:con.execute("UPDATE users SET country='RU' WHERE id=123")
         def change(code):return self.client.post('/api/country',headers=self.headers,json={'code':code})
