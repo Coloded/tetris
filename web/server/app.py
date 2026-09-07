@@ -229,7 +229,7 @@ def change_country(payload: CountryChange, request: Request):
         # Same-country submissions are no-ops, including a retry after success.
         if user['country']!=payload.code:
             if user['country_changed']: raise HTTPException(409,'Country can only be changed once')
-            con.execute('UPDATE users SET country=?,country_changed=1,country_checked=1 WHERE id=?',(payload.code,uid))
+            con.execute('UPDATE users SET country=?,country_changed=1,country_checked=1,privacy_version=privacy_version+1 WHERE id=?',(payload.code,uid))
         return ranking(con,uid)
 
 @app.post('/api/games')

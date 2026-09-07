@@ -34,6 +34,8 @@ class CountryTests(unittest.TestCase):
         self.assertEqual(change('ZZ').status_code,422)
         result=change('DE');self.assertEqual(result.status_code,200)
         self.assertFalse(result.json()['country']['can_change'])
+        self.assertEqual(result.json()['privacy']['version'],1)
+        self.assertEqual(change('DE').json()['privacy']['version'],1)
         self.assertEqual(change('DE').status_code,200)
         self.assertEqual(change('RU').status_code,409)
         module.init_db()

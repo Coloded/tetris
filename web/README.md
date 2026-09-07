@@ -27,6 +27,15 @@ players in both world and country lists, but the owner sees their own position
 among public players. Records continue to save. Hidden players are also excluded
 from overtaking notices; privacy changes are reflected on the next refresh.
 
+Country and quiet-mode controls display only server-confirmed values. Failed
+writes trigger a fresh read, never an automatic repeated settings write. If
+that read fails too, controls stay disabled with an unconfirmed-status notice
+and a persistent connection warning. Opening the top, returning to the app,
+reconnecting, the retry button and periodic refresh all reload database status.
+A shared monotonic revision prevents delayed replies from reverting either
+setting. Frontend tests simulate lost requests, lost acknowledgements and
+reconnection; no real accounts are involved.
+
 Only Telegram ID and the Telegram first/last name from server-validated
 `initData` establish the account. There is no PIN, editable nickname or name
 registration. Names refresh on login and are rendered as text. Telegram IDs
@@ -60,7 +69,7 @@ through the environment for authenticated launches; never commit `.env`.
 
 ```sh
 .venv/bin/python -m unittest discover -s tests -v
-node --test tests/engine.test.js
+node --test tests/*.test.js
 ```
 
 Tests use isolated temporary databases and synthetic signed launch data. They
