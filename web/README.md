@@ -108,3 +108,21 @@ is idempotent. Atomic database updates prevent concurrent requests bypassing the
 limit. Changing country moves the existing record into that country's ranking
 without changing the world score/rank. Login and server restarts never reset the
 one-change allowance.
+
+## Bot greeting and avatar
+
+A fresh private `/start` triggers a RU/EN greeting explaining the game menu,
+plus an inline launch button. Telegram delivers updates to
+`/api/telegram/webhook` with the `WEBHOOK_SECRET` header; unauthenticated requests
+are rejected and duplicate updates are suppressed. Old queued `/start` messages
+and unrelated messages are ignored. Responses use Telegram's webhook reply
+method without a separate polling process.
+
+`deploy/configure_bot.py` registers the webhook and commands and uploads
+`assets/branding/bot-icon.jpg` as the bot avatar. The original PNG and imagegen
+prompt are kept beside it. `WEBHOOK_SECRET` is generated in the root-only `.env`.
+
+Telegram owns its native bottom attribution bar. The Mini App requests a dark
+bottom bar on Telegram 7.10+ and fullscreen from the Play gesture on Telegram
+8.0+, respecting host safe areas. The client controls whether native attribution
+is visible; the website cannot force-hide it with CSS.

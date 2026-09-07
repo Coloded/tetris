@@ -1,0 +1,3 @@
+Generated with the built-in imagegen tool.
+
+Create a finished square Telegram bot avatar for Game1500, a premium colorful Tetris game. Center a compact interlocking cluster of recognizable tetromino blocks, jewel-like glossy enamel squares with rounded bevels and dimensional highlights: dominant purple T piece, small cyan, blue, golden yellow and emerald blocks. Front-facing grid, bold simple silhouette legible as a 48px circular avatar. Deep midnight navy background #101321 with subtle violet ambient glow. Keep all meaningful artwork inside central 70% circular safe area. Beautiful restrained 3D volume, crisp polished mobile game icon, no text, no letters, no numbers, no watermark. Opaque full-bleed square PNG.

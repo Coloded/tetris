@@ -19,6 +19,7 @@ from .geo import COUNTRIES, client_ip, country_for_ip
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.environ.get('GAME_DB', ROOT / 'data/game.sqlite3'))
 BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
+WEBHOOK_SECRET = os.environ.get('WEBHOOK_SECRET', '')
 
 @contextmanager
 def db():
@@ -35,6 +36,7 @@ def init_db():
         con.execute('PRAGMA journal_mode=WAL')
         con.executescript('''
         CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,name TEXT NOT NULL,best INTEGER NOT NULL DEFAULT 0,best_at REAL NOT NULL DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS bot_updates(id INTEGER PRIMARY KEY,received REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),expires REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS games(id TEXT PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),started REAL NOT NULL,state TEXT NOT NULL,seq INTEGER NOT NULL DEFAULT 0,finished INTEGER NOT NULL DEFAULT 0,last_hash TEXT,last_response TEXT);
         CREATE INDEX IF NOT EXISTS games_user ON games(user_id);
@@ -135,6 +137,41 @@ def ranking(con,uid):
     local=ranked_rows(con,uid,user['country']) if user['country'] else {'top':[],'me':None}
     world['country']={'code':user['country'],'can_change':not bool(user['country_changed']),**local}
     return world
+
+@app.post('/api/telegram/webhook')
+async def telegram_webhook(request: Request):
+    supplied=request.headers.get('x-telegram-bot-api-secret-token','')
+    if not WEBHOOK_SECRET or not hmac.compare_digest(supplied,WEBHOOK_SECRET):
+        raise HTTPException(403,'Forbidden')
+    try:
+        update=await request.json()
+        update_id=update.get('update_id')
+        message=update.get('message',{})
+        chat=message.get('chat',{})
+        text=message.get('text','')
+        if type(update_id) is not int or update_id<0: raise ValueError()
+        if not isinstance(text,str): raise ValueError()
+        command=text.split(maxsplit=1)[0].lower() if text else ''
+        if chat.get('type')!='private' or command not in ('/start','/start@game1500_bot'):
+            return {'ok':True}
+        chat_id=chat.get('id');date=message.get('date')
+        if type(chat_id) is not int or chat_id<=0 or type(date) is not int: raise ValueError()
+        if time.time()-date>300: return {'ok':True}
+        language=message.get('from',{}).get('language_code','ru')
+        english=isinstance(language,str) and not language.startswith('ru')
+    except (ValueError,TypeError,AttributeError):
+        raise HTTPException(422,'Invalid update')
+    with db() as con:
+        inserted=con.execute('INSERT OR IGNORE INTO bot_updates VALUES(?,?)',(update_id,time.time())).rowcount
+        con.execute('DELETE FROM bot_updates WHERE received<?',(time.time()-86400*7,))
+    if not inserted: return {'ok':True}
+    # Telegram executes the method supplied in the webhook response. This only
+    # replies to a fresh, authenticated private /start, never unsolicited chats.
+    text=('Welcome! 🎮\nLaunch the game with “🎮 Играть / Play” in the bot menu. You can also use the button below.' if english else
+          'Привет! 🎮\nЗапусти игру через кнопку «🎮 Играть / Play» в меню бота. Или нажми кнопку ниже.')
+    return {'method':'sendMessage','chat_id':chat_id,'text':text,
+            'reply_markup':{'inline_keyboard':[[{'text':'🎮 Play' if english else '🎮 Запустить игру',
+                                                'web_app':{'url':'https://bg.netnum.ru/game1500/'}}]]}}
 
 @app.get('/api/health')
 def health(): return {'ok':True,'telegram_ready':bool(BOT_TOKEN)}
