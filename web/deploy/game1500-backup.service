@@ -1,0 +1,8 @@
+[Unit]
+Description=Game1500 SQLite backup
+[Service]
+Type=oneshot
+User=game1500
+Group=game1500
+UMask=0077
+ExecStart=/usr/bin/python3 /var/game1500/deploy/backup.py

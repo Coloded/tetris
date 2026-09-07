@@ -1,0 +1,23 @@
+[Unit]
+Description=Game1500 Telegram Tetris
+After=network.target
+
+[Service]
+User=game1500
+Group=game1500
+WorkingDirectory=/var/game1500
+EnvironmentFile=/var/game1500/.env
+Environment=GAME_DB=/var/game1500/data/game.sqlite3
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/var/game1500/.venv/bin/python -m uvicorn server.app:app --host 127.0.0.1 --port 8765 --workers 1 --no-access-log
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/game1500/data
+
+[Install]
+WantedBy=multi-user.target

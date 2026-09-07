@@ -1,25 +1,84 @@
-# Telegram Mini App assets
+# Game1500 Telegram Tetris
 
-Bot: `@game1500`. Server directory: `/var/game1500` on `bg.netnum.ru`.
+Live: https://bg.netnum.ru/game1500/
+Bot: https://t.me/Game1500_bot — launch with its **Играть / Play** menu button.
 
-`assets/tetrominoes/` contains seven original PNG tetromino sprites, one per
-piece. See `manifest.json` for filenames and `prompts.json` for generation
-instructions. Generated with the built-in image generation tool.
+A Python/FastAPI backend with a plain JavaScript Canvas client. No frontend
+build step. Uses the seven original PNG assets in `assets/tetrominoes/`.
+The browser samples individual cells from these originals at runtime; source
+PNGs are preserved. `prompts.json` records the original imagegen prompts.
 
-These are artwork assets for the future web client, not a running Mini App.
-Gameplay must use logical grid coordinates independently of sprite dimensions.
+## Play
 
-## Account requirements
+- Fixed 10 × 20 board for every player; seven-bag randomizer, next piece, ghost.
+- Arrow keys: move, rotate, soft drop. Space: hard drop. P: pause.
+- Touch buttons support press-and-hold movement. Switching away pauses play.
+- A 400 ms contact delay allows adjustment; at most 15 movement resets.
+- Lines score 100 / 300 / 500 / 800 × level. Level rises every ten lines.
+- Russian/English selector; initial language follows Telegram/browser settings.
+- Ordinary browser launches offer practice with no identity or saved records.
+- Top 30, current rank even outside the top, and overtaking congratulations.
 
-- Identify accounts by the Telegram user ID from server-validated `initData`.
-- Display only the Telegram account name (`first_name` plus `last_name` when
-  present); update it on subsequent authenticated launches. No editable nickname,
-  name registration form, or PIN. Treat the name as text, never HTML.
-- Store the bot token only in server configuration, never in browser assets or Git.
-- Keep SQLite on the server; expose authenticated APIs for games and rankings.
+## Identity and records
 
-## Planned ranked gameplay
+Only Telegram ID and the Telegram first/last name from server-validated
+`initData` establish the account. There is no PIN, editable nickname or name
+registration. Names refresh on login and are rendered as text. Telegram IDs
+are not returned in leaderboard entries. Terminal accounts remain separate.
 
-Use a fixed 10 by 20 board, mobile controls, keyboard support, Russian/English,
-server-validated game results and a top 30 with the current player's rank.
-Terminal accounts are not automatically linked to Telegram accounts by name.
+The backend checks Telegram's HMAC and a five-minute launch age, then creates
+a 24-hour bearer session (only its hash is stored). Bot tokens never enter
+browser assets. Starting a new ranked game closes the user's previous one.
+
+The client runs deterministic 50 Hz simulation for responsive input and sends
+ordered batches about once per second. The server replays moves using its own
+state/seed, computes scores, bounds simulation speed against elapsed real time,
+and saves records transactionally in SQLite. Retries are idempotent. This
+prevents arbitrary submitted scores; it is not protection against automated
+players. Network failure pauses play and retries unsent moves. Closing the app
+before an upload finishes can lose the last unsent moves, not saved records.
+Games expire after two hours. Ranking refreshes on uploads and every 15 seconds.
+
+## Development
+
+```sh
+cd web
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.lock
+.venv/bin/python -m uvicorn server.app:app --host 127.0.0.1 --port 8765
+```
+
+Without `BOT_TOKEN`, practice works and Telegram login returns 503. Set the token
+through the environment for authenticated launches; never commit `.env`.
+`GAME_DB` overrides the default `web/data/game.sqlite3`.
+
+```sh
+.venv/bin/python -m unittest discover -s tests -v
+node --test tests/engine.test.js
+```
+
+Tests use isolated temporary databases and synthetic signed launch data. They
+cover authentication, account ownership, repeat uploads, invalid moves, score
+injection, elapsed-time bounds, persisted scores and Python/JavaScript parity.
+
+## Deployment
+
+Files live in `/var/game1500`. `.env` contains `BOT_TOKEN=...` and is root-only.
+The `game1500` service runs as the dedicated unprivileged `game1500` user on
+127.0.0.1:8765. SQLite is in `data/`; Nginx strips the `/game1500/` URL prefix.
+Only `public/` and `assets/` are served, never the project root or database.
+
+`deploy/install.py` installs service units and the isolated Nginx location.
+It backs up changed Nginx configuration under `/var/backups/game1500-nginx`.
+`deploy/configure_bot.py` sets and verifies the bot launch menu without printing
+credentials. The optional main profile launch button can also be configured in
+BotFather with the same HTTPS URL.
+
+`game1500-backup.timer` runs daily at 04:15 server time. It uses SQLite's backup
+API, stores consistent snapshots in `data/backups/`, and retains 14 copies.
+Game session rows older than seven days are pruned when new games start.
+
+For an update, copy `public/`, `server/`, `assets/`, `deploy/` and the dependency
+files, preserving `.env` and `data/`; install requirements into `.venv` and run
+`systemctl restart game1500`. Diagnose with `journalctl -u game1500` and verify
+`/game1500/api/health`. Never deploy local test launch pages or development tokens.
