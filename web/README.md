@@ -54,6 +54,21 @@ players. Network failure pauses play and retries unsent moves. Closing the app
 before an upload finishes can lose the last unsent moves, not saved records.
 Games expire after two hours. Ranking refreshes on uploads and every 15 seconds.
 
+## Account deletion
+
+Click your own name in the leaderboard (or your rank summary outside the top
+30) to reveal Delete account. The first confirmation has No / Yes: Yes escapes
+three times within the dialog, then opens a second explicit confirmation.
+Touch and keyboard users advance the same steps by activating Yes.
+
+Deletion removes the user's live profile, records, games and all sessions in one
+transaction. It requires the caller's bearer session and explicit confirmation;
+no target user ID is accepted. A hash-only receipt, valid for 24 hours, makes a
+retry after a lost response safe even if the account has since been recreated.
+Existing backup snapshots expire through the normal 14-backup retention policy.
+The current Mini App stops after confirmed deletion; a fresh Telegram launch
+registers a new empty account. Production users are never deleted by tests.
+
 ## Development
 
 ```sh

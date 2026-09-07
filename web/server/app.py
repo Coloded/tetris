@@ -36,6 +36,7 @@ def init_db():
         con.execute('PRAGMA journal_mode=WAL')
         con.executescript('''
         CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,name TEXT NOT NULL,best INTEGER NOT NULL DEFAULT 0,best_at REAL NOT NULL DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS deletion_receipts(token TEXT PRIMARY KEY,expires REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS bot_updates(id INTEGER PRIMARY KEY,received REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),expires REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS games(id TEXT PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),started REAL NOT NULL,state TEXT NOT NULL,seq INTEGER NOT NULL DEFAULT 0,finished INTEGER NOT NULL DEFAULT 0,last_hash TEXT,last_response TEXT);
@@ -80,6 +81,10 @@ class Login(BaseModel):
 class PrivacyChange(BaseModel):
     model_config=ConfigDict(extra='forbid',strict=True)
     hidden: bool
+
+class AccountDelete(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    confirmed: bool
 
 class CountryChange(BaseModel):
     model_config=ConfigDict(extra='forbid',strict=True)
@@ -209,6 +214,28 @@ def auth(payload: Login, request: Request):
 def leaderboard(request: Request):
     uid=identity(request)
     with db() as con: return ranking(con,uid)
+
+@app.post('/api/account/delete')
+def delete_account(payload: AccountDelete, request: Request):
+    if not payload.confirmed: raise HTTPException(422,'Confirmation required')
+    auth=request.headers.get('authorization','')
+    if not auth.startswith('Bearer ') or len(auth)>256: raise HTTPException(401,'Login required')
+    hashed=hashlib.sha256(auth[7:].encode()).hexdigest()
+    now=time.time()
+    with db() as con:
+        con.execute('BEGIN IMMEDIATE')
+        con.execute('DELETE FROM deletion_receipts WHERE expires<=?',(now,))
+        # A retry after a lost acknowledgement must not delete a recreated account.
+        if con.execute('SELECT 1 FROM deletion_receipts WHERE token=?',(hashed,)).fetchone():
+            return {'deleted':True}
+        session=con.execute('SELECT user_id FROM sessions WHERE token=? AND expires>?',(hashed,now)).fetchone()
+        if not session: raise HTTPException(401,'Session expired. Reopen the Mini App.')
+        uid=session['user_id']
+        con.execute('DELETE FROM games WHERE user_id=?',(uid,))
+        con.execute('DELETE FROM sessions WHERE user_id=?',(uid,))
+        con.execute('DELETE FROM users WHERE id=?',(uid,))
+        con.execute('INSERT INTO deletion_receipts VALUES(?,?)',(hashed,now+86400))
+    return {'deleted':True}
 
 @app.post('/api/privacy')
 def change_privacy(payload: PrivacyChange, request: Request):
