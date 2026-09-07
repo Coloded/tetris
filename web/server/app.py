@@ -138,9 +138,9 @@ def ranked_rows(con,uid,country=None):
     where='WHERE (hidden=0 OR id=?)'+(' AND country=?' if country else '')
     params=(uid,country,uid) if country else (uid,uid)
     sql=f'SELECT id,name,best,country,ROW_NUMBER() OVER (ORDER BY best DESC,best_at ASC,id ASC) AS rank FROM users {where}'
-    rows=con.execute(f'SELECT * FROM ({sql}) WHERE rank<=30 OR id=? ORDER BY rank',params).fetchall()
+    rows=con.execute(f'SELECT * FROM ({sql}) WHERE rank<=100 OR id=? ORDER BY rank',params).fetchall()
     entries=[{'name':r['name'],'score':r['best'],'rank':r['rank'],'me':r['id']==uid,'country':r['country']} for r in rows]
-    return {'top':[r for r in entries if r['rank']<=30],'me':next((r for r in entries if r['me']),None)}
+    return {'top':[r for r in entries if r['rank']<=100],'me':next((r for r in entries if r['me']),None)}
 
 def ranking(con,uid):
     user=con.execute('SELECT country,country_changed,hidden,privacy_version FROM users WHERE id=?',(uid,)).fetchone()

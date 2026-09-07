@@ -17,7 +17,7 @@ PNGs are preserved. `prompts.json` records the original imagegen prompts.
 - Lines score 100 / 300 / 500 / 800 × level. Level rises every ten lines.
 - Russian/English selector; initial language follows Telegram/browser settings.
 - Ordinary browser launches offer practice with no identity or saved records.
-- Top 30, current rank even outside the top, and overtaking congratulations.
+- Top 100, current rank even outside the top, and overtaking congratulations.
 
 ## Identity and records
 
@@ -57,7 +57,7 @@ Games expire after two hours. Ranking refreshes on uploads and every 15 seconds.
 ## Account deletion
 
 Click your own name in the leaderboard (or your rank summary outside the top
-30) to reveal Delete account. The first confirmation has No / Yes: Yes escapes
+100) to reveal Delete account. The first confirmation has No / Yes: Yes escapes
 three times within the dialog, then opens a second explicit confirmation.
 Touch and keyboard users advance the same steps by activating Yes.
 
@@ -115,7 +115,7 @@ files, preserving `.env` and `data/`; install requirements into `.venv` and run
 
 ## World and country rankings
 
-The leaderboard has **All World Top** and a top 30 for the player's stored
+The leaderboard has **All World Top** and a top 100 for the player's stored
 country, with independent ranks and overtaking notices. Existing records and
 scores are preserved. Flags appear beside names; region labels use the selected
 interface language. `public/countries.json` contains the 249 ISO alpha-2 codes
@@ -156,3 +156,6 @@ Telegram owns its native bottom attribution bar. The Mini App requests a dark
 bottom bar on Telegram 7.10+ and fullscreen from the Play gesture on Telegram
 8.0+, respecting host safe areas. The client controls whether native attribution
 is visible; the website cannot force-hide it with CSS.
+
+Players below rank 100 also appear immediately after the top 100 with their real
+rank. On record updates their row moves into the top without duplication.

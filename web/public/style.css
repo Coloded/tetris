@@ -15,3 +15,5 @@
 #settings-status{border:1px solid #efbd6866;background:#efbd6812;border-radius:12px;padding:12px;margin-bottom:12px;font-size:12px;color:#f1d4a6;line-height:1.5}#settings-message{margin:0 0 8px}#settings-status .small{font-size:12px}
 
 button.my-place{width:100%;text-align:left;cursor:pointer}.leader-row button.player-name{border:0;background:none;color:inherit;font:inherit;text-align:left;padding:0;cursor:pointer;text-decoration:underline;text-decoration-style:dotted}#account-dialog{width:min(420px,calc(100vw - 32px));box-sizing:border-box}#account-dialog .danger{background:#713346;color:#ffe1e6;border:1px solid #cf647b}#account-copy{font-size:13px;line-height:1.5}#delete-arena{display:flex;gap:12px;position:relative;margin:18px 0;min-height:48px}#delete-arena[hidden]{display:none}#delete-arena button{min-width:80px;height:44px}#delete-arena.escaping{height:210px}#delete-arena.escaping #delete-yes{position:absolute;left:110px;top:0}#delete-error{font-size:12px;line-height:1.5;color:#f1d4a6}#account-close{margin-top:10px}
+
+.leader-row.outside-top{margin-top:12px;border-top:2px dashed #b49aff77}

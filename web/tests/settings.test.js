@@ -7,7 +7,7 @@ import vm from 'node:vm';
 // No real Telegram accounts or production database are used.
 function fixture(){
  const elements=new Map(),events={},requests=[],queue=[];
- function el(id){if(!elements.has(id))elements.set(id,{value:'',checked:false,disabled:false,hidden:false,textContent:'',open:false,classList:{add(){},remove(){},toggle(){}},setAttribute(){},replaceChildren(){},getContext(){return {}},showModal(){this.open=true},close(){this.open=false},append(){},querySelector(){return null}});return elements.get(id);}
+ function el(id){if(!elements.has(id))elements.set(id,{value:'',checked:false,disabled:false,hidden:false,textContent:'',open:false,classList:{add(){},remove(){},toggle(){}},setAttribute(){},replaceChildren(...items){this.children=items},getContext(){return {}},showModal(){this.open=true},close(){this.open=false},append(item){(this.children??=[]).push(item)},querySelector(){return null}});return elements.get(id);}
  const context=vm.createContext({accountDeletion:()=>({open(){}}),console,URL,AbortSignal,Intl,performance,location:{href:'https://example.test/'},navigator:{language:'en'},localStorage:{getItem(){return 'en'}},window:{addEventListener(name,fn){events[name]=fn}},document:{getElementById:el,createElement:()=>el(Symbol()),querySelectorAll:()=>[],documentElement:{},body:{classList:{add(){},remove(){}}},addEventListener(name,fn){events[name]=fn},hidden:false},setInterval(){},setTimeout(){},clearTimeout(){},fetch:async(url,options)=>{requests.push({path:new URL(url).pathname,body:options.body});const fn=queue.shift();assert.ok(fn,'unexpected request');return fn();}});
  let source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import .*\n/,'').replace(/boot\(\);\s*$/,'');
  vm.runInContext(source,context);
@@ -72,4 +72,14 @@ test('opening top always fetches, offline event warns and reconnect fetches agai
  assert.equal(f.el('quiet-mode').checked,true);f.events.offline();assert.match(f.el('settings-message').textContent,/No connection/);
  f.queue.push(f.ok(f.board(false,2)));await f.events.online();assert.equal(f.el('quiet-mode').checked,false);
  assert.equal(f.requests.length,2);
+});
+
+
+test('outside top100: append own true position, then move into top without duplicates',()=>{
+ const f=fixture();const board=f.board();
+ board.top=Array.from({length:100},(_,i)=>({rank:i+1,name:'P'+i,score:1000-i,country:'RU',me:false}));
+ board.me={rank:237,name:'Tester',score:1,country:'RU',me:true};f.set(board);
+ let rows=f.el('leaders').children;assert.equal(rows.length,101);assert.equal(rows[100].children[0].textContent,237);assert.match(rows[100].className,/outside-top/);
+ board.me={...board.me,rank:50,score:951};board.top.splice(49,0,board.me);board.top.pop();f.set(board);
+ rows=f.el('leaders').children;assert.equal(rows.length,100);assert.equal(rows.filter(row=>row.className.includes(' me')).length,1);assert.equal(rows[49].children[0].textContent,50);
 });

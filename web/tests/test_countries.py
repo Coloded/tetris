@@ -60,20 +60,20 @@ class CountryTests(unittest.TestCase):
         with ThreadPoolExecutor(max_workers=2) as pool:statuses=list(pool.map(change,['DE','US']))
         self.assertEqual(sorted(statuses),[200,409])
 
-    def test_separate_country_ranks_top30_and_transfer(self):
+    def test_separate_country_ranks_top100_and_transfer(self):
         with module.db() as con:
             con.execute("UPDATE users SET country='RU',best=10 WHERE id=123")
-            for i in range(35):
-                con.execute('INSERT INTO users(id,name,best,best_at,country,country_checked) VALUES(?,?,?,?,?,1)',(2000+i,f'Player{i}',100+i,i,'RU' if i<31 else 'DE'))
+            for i in range(115):
+                con.execute('INSERT INTO users(id,name,best,best_at,country,country_checked) VALUES(?,?,?,?,?,1)',(2000+i,f'Player{i}',100+i,i,'RU' if i<111 else 'DE'))
         board=self.client.get('/api/leaderboard',headers=self.headers).json()
-        self.assertEqual(board['me']['rank'],36)
-        self.assertEqual(board['country']['me']['rank'],32)
-        self.assertEqual(len(board['top']),30)
-        self.assertEqual(len(board['country']['top']),30)
+        self.assertEqual(board['me']['rank'],116)
+        self.assertEqual(board['country']['me']['rank'],112)
+        self.assertEqual(len(board['top']),100)
+        self.assertEqual(len(board['country']['top']),100)
         self.assertTrue(all(row['country']=='RU' for row in board['country']['top']))
         moved=self.client.post('/api/country',headers=self.headers,json={'code':'DE'}).json()
         self.assertEqual(moved['country']['me']['rank'],5)
-        self.assertEqual(moved['me']['rank'],36)
+        self.assertEqual(moved['me']['rank'],116)
         self.assertEqual(moved['me']['score'],10)
         self.assertTrue(all(row['country']=='DE' for row in moved['country']['top']))
 

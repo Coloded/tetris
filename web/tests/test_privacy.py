@@ -55,12 +55,12 @@ class PrivacyTests(unittest.TestCase):
         retry=self.client.post(url,headers=self.headers,json=body).json()
         self.assertNotIn('Name200',json.dumps(retry))
         self.assertEqual(retry['passed'],[]);self.assertEqual(retry['passed_country'],[])
-    def test_hidden_rows_do_not_reduce_public_top30(self):
+    def test_hidden_rows_do_not_reduce_public_top100(self):
         with module.db() as con:
-            for i in range(70):
+            for i in range(150):
                 con.execute('INSERT INTO users(id,name,best,best_at,hidden) VALUES(?,?,?,?,?)',(1000+i,f'P{i}',1000-i,0,int(i<35)))
         result=self.client.get('/api/leaderboard',headers=self.headers).json()
-        self.assertEqual(len(result['top']),30)
+        self.assertEqual(len(result['top']),100)
         self.assertEqual(result['top'][0]['name'],'P35')
-        self.assertEqual(result['me']['rank'],36)
+        self.assertEqual(result['me']['rank'],116)
 del Fixture
