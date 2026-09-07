@@ -82,3 +82,29 @@ For an update, copy `public/`, `server/`, `assets/`, `deploy/` and the dependenc
 files, preserving `.env` and `data/`; install requirements into `.venv` and run
 `systemctl restart game1500`. Diagnose with `journalctl -u game1500` and verify
 `/game1500/api/health`. Never deploy local test launch pages or development tokens.
+
+## World and country rankings
+
+The leaderboard has **All World Top** and a top 30 for the player's stored
+country, with independent ranks and overtaking notices. Existing records and
+scores are preserved. Flags appear beside names; region labels use the selected
+interface language. `public/countries.json` contains the 249 ISO alpha-2 codes
+from the public-domain IANA tzdata country table; the server validates choices
+against the same list.
+
+On the first authenticated launch (or first launch after this feature was
+installed), the server claims a one-time country lookup in SQLite and calls
+IPinfo Lite using `IPINFO_TOKEN` from the root-only `.env`. Nginx overwrites
+`X-Real-IP` from its connection address; Uvicorn disables automatic proxy-header
+interpretation, and only the loopback Nginx peer is trusted. Client-supplied
+forwarding headers cannot choose the lookup IP. The profile stores the country
+code, not the IP or provider response. VPNs/proxies can affect the initial result.
+
+The lookup is attempted once, even on provider failure, with a three-second
+network timeout. A missing country does not block playing or world ranking.
+The player may select a country manually **once**, with a clear notice that the
+choice is final. Saving the same country is a no-op; retrying a successful save
+is idempotent. Atomic database updates prevent concurrent requests bypassing the
+limit. Changing country moves the existing record into that country's ranking
+without changing the world score/rank. Login and server restarts never reset the
+one-change allowance.

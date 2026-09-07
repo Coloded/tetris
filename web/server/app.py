@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ConfigDict
 from .engine import Engine, ACTIONS
+from .geo import COUNTRIES, client_ip, country_for_ip
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.environ.get('GAME_DB', ROOT / 'data/game.sqlite3'))
@@ -39,6 +40,10 @@ def init_db():
         CREATE INDEX IF NOT EXISTS games_user ON games(user_id);
         CREATE INDEX IF NOT EXISTS users_ranking ON users(best DESC,best_at,id);
         ''')
+        columns={row['name'] for row in con.execute('PRAGMA table_info(users)')}
+        for name,definition in (('country','TEXT'),('country_checked','INTEGER NOT NULL DEFAULT 0'),('country_changed','INTEGER NOT NULL DEFAULT 0')):
+            if name not in columns: con.execute(f'ALTER TABLE users ADD COLUMN {name} {definition}')
+        con.execute('CREATE INDEX IF NOT EXISTS users_country_ranking ON users(country,best DESC,best_at,id)')
 
 @asynccontextmanager
 async def lifespan(app):
@@ -69,6 +74,10 @@ async def bounds(request: Request, call_next):
 class Login(BaseModel):
     model_config=ConfigDict(extra='forbid')
     init_data: str=Field(min_length=1,max_length=16384)
+
+class CountryChange(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    code: str=Field(pattern=r'^[A-Z]{2}$')
 
 class Batch(BaseModel):
     model_config=ConfigDict(extra='forbid',strict=True)
@@ -112,22 +121,39 @@ def identity(request):
     return row['user_id']
 
 
+def ranked_rows(con,uid,country=None):
+    where='WHERE country=?' if country else ''
+    params=(country,uid) if country else (uid,)
+    sql=f'SELECT id,name,best,country,ROW_NUMBER() OVER (ORDER BY best DESC,best_at ASC,id ASC) AS rank FROM users {where}'
+    rows=con.execute(f'SELECT * FROM ({sql}) WHERE rank<=30 OR id=? ORDER BY rank',params).fetchall()
+    entries=[{'name':r['name'],'score':r['best'],'rank':r['rank'],'me':r['id']==uid,'country':r['country']} for r in rows]
+    return {'top':[r for r in entries if r['rank']<=30],'me':next((r for r in entries if r['me']),None)}
+
 def ranking(con,uid):
-    sql='SELECT id,name,best,ROW_NUMBER() OVER (ORDER BY best DESC,best_at ASC,id ASC) AS rank FROM users'
-    rows=con.execute(f'SELECT * FROM ({sql}) WHERE rank<=30 OR id=? ORDER BY rank',(uid,)).fetchall()
-    # Public entries have no Telegram IDs; the current-user flag suffices.
-    entries=[{'name':r['name'],'score':r['best'],'rank':r['rank'],'me':r['id']==uid} for r in rows]
-    return {'top':[r for r in entries if r['rank']<=30],'me':next(r for r in entries if r['me'])}
+    user=con.execute('SELECT country,country_changed FROM users WHERE id=?',(uid,)).fetchone()
+    world=ranked_rows(con,uid)
+    local=ranked_rows(con,uid,user['country']) if user['country'] else {'top':[],'me':None}
+    world['country']={'code':user['country'],'can_change':not bool(user['country_changed']),**local}
+    return world
 
 @app.get('/api/health')
 def health(): return {'ok':True,'telegram_ready':bool(BOT_TOKEN)}
 
 @app.post('/api/auth')
-def auth(payload: Login):
+def auth(payload: Login, request: Request):
     uid,name=telegram_user(payload.init_data)
     token=secrets.token_urlsafe(32);now=time.time()
     with db() as con:
         con.execute('INSERT INTO users(id,name,best_at) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name',(uid,name,now))
+        claimed=con.execute('UPDATE users SET country_checked=1 WHERE id=? AND country_checked=0',(uid,)).rowcount
+    # Claim once in SQLite before the external request; concurrent logins do not
+    # look up again. Provider failure leaves the one-time manual choice available.
+    if claimed:
+        country=country_for_ip(client_ip(request))
+        if country:
+            with db() as con:
+                con.execute('UPDATE users SET country=? WHERE id=? AND country IS NULL AND country_changed=0',(country,uid))
+    with db() as con:
         con.execute('DELETE FROM sessions WHERE expires<?',(now,))
         con.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,now+86400))
         # Keep a small number of live sessions per user, without storing launch data.
@@ -139,6 +165,19 @@ def auth(payload: Login):
 def leaderboard(request: Request):
     uid=identity(request)
     with db() as con: return ranking(con,uid)
+
+@app.post('/api/country')
+def change_country(payload: CountryChange, request: Request):
+    uid=identity(request)
+    if payload.code not in COUNTRIES: raise HTTPException(422,'Unknown country')
+    with db() as con:
+        con.execute('BEGIN IMMEDIATE')
+        user=con.execute('SELECT country,country_changed FROM users WHERE id=?',(uid,)).fetchone()
+        # Same-country submissions are no-ops, including a retry after success.
+        if user['country']!=payload.code:
+            if user['country_changed']: raise HTTPException(409,'Country can only be changed once')
+            con.execute('UPDATE users SET country=?,country_changed=1,country_checked=1 WHERE id=?',(payload.code,uid))
+        return ranking(con,uid)
 
 @app.post('/api/games')
 def start(request: Request):
@@ -170,7 +209,9 @@ def steps(game_id: str, payload: Batch, request: Request):
         if not row: raise HTTPException(404,'Game not found')
         if row['seq']==payload.seq:
             if row['last_hash']!=digest: raise HTTPException(409,'Conflicting retry')
-            return json.loads(row['last_response'])
+            response=json.loads(row['last_response'])
+            response['leaderboard']=ranking(con,uid)
+            return response
         if row['finished']: raise HTTPException(409,'Game finished or replaced')
         if row['seq']+1!=payload.seq: raise HTTPException(409,'Out of order')
         engine=Engine(state=json.loads(row['state']))
@@ -182,7 +223,11 @@ def steps(game_id: str, payload: Batch, request: Request):
         con.execute('UPDATE users SET best=?,best_at=? WHERE id=? AND best<?',(engine.score,time.time(),uid,engine.score))
         board=ranking(con,uid)
         passed=[r['name'] for r in before['top'] if not r['me'] and board['me']['rank']<=r['rank']<before['me']['rank'] and r['score']<engine.score]
-        response={'seq':payload.seq,'state':engine.export(),'leaderboard':board,'passed':passed,'finished':engine.over or payload.finish}
+        old_local,new_local=before['country'],board['country']
+        passed_country=[]
+        if old_local['me'] and new_local['me']:
+            passed_country=[r['name'] for r in old_local['top'] if not r['me'] and new_local['me']['rank']<=r['rank']<old_local['me']['rank'] and r['score']<engine.score]
+        response={'passed_country':passed_country,'seq':payload.seq,'state':engine.export(),'leaderboard':board,'passed':passed,'finished':engine.over or payload.finish}
         con.execute('UPDATE games SET state=?,seq=?,finished=?,last_hash=?,last_response=? WHERE id=?',(json.dumps(engine.export()),payload.seq,int(response['finished']),digest,json.dumps(response),game_id))
     return response
 
