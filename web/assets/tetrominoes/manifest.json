@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "pieces": {
+    "I": {
+      "file": "i.png",
+      "color": "cyan turquoise"
+    },
+    "O": {
+      "file": "o.png",
+      "color": "golden yellow"
+    },
+    "T": {
+      "file": "t.png",
+      "color": "amethyst purple"
+    },
+    "S": {
+      "file": "s.png",
+      "color": "emerald green"
+    },
+    "Z": {
+      "file": "z.png",
+      "color": "ruby red"
+    },
+    "J": {
+      "file": "j.png",
+      "color": "sapphire blue"
+    },
+    "L": {
+      "file": "l.png",
+      "color": "amber orange"
+    }
+  }
+}
